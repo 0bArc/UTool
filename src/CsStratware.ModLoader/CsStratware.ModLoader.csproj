@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>JSON mod discovery, validation, and load pipeline.</Description>
+    <IsPackable>true</IsPackable>
+    <PackageId>CsStratware.ModLoader</PackageId>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\CsStratware.Core\CsStratware.Core.csproj" />
+    <ProjectReference Include="..\CsStratware.Sdk\CsStratware.Sdk.csproj" />
+  </ItemGroup>
+</Project>

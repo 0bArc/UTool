@@ -1,0 +1,14 @@
+{
+  "patches": [
+    {
+      "assetPath": "/Game/Blueprints/PlayerCharacter.PlayerCharacter_C",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/Properties/MaxWalkSpeed",
+          "value": 600
+        }
+      ]
+    }
+  ]
+}

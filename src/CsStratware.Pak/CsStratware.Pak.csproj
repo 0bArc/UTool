@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>UE4 .pak read, build, and patch support for csStratware.</Description>
+    <RootNamespace>CsStratware.Pak</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\CsStratware.Core\CsStratware.Core.csproj" />
+    <ProjectReference Include="..\CsStratware.ModLoader\CsStratware.ModLoader.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,40 @@
+## Build
+bin/
+obj/
+out/
+dist/
+*.user
+*.suo
+*.cache
+*.dll
+*.exe
+*.pdb
+
+## IDE
+.vs/
+.idea/
+*.swp
+*~
+
+## OS
+Thumbs.db
+.DS_Store
+
+## Local / secrets
+*.local.json
+.env
+secrets.json
+
+## Test / coverage
+TestResults/
+coverage/
+*.trx
+
+## NuGet
+packages/
+*.nupkg
+
+## Mod dev scratch
+mods/**/work/
+mods/**/dist/
+mods/**/.cache/

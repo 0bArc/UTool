@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Authoring SDK for csStratware code mods (JSON asset patches).</Description>
+    <IsPackable>true</IsPackable>
+    <PackageId>CsStratware.Sdk</PackageId>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\CsStratware.Core\CsStratware.Core.csproj" />
+  </ItemGroup>
+</Project>

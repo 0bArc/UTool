@@ -1,0 +1,19 @@
+{
+  "id": "example.mod",
+  "name": "Example Mod",
+  "version": "0.1.0",
+  "description": "Starter mod package for csStratware.",
+  "author": "csStratware",
+  "target": {
+    "gameId": "your-game",
+    "engineVersion": "4.27",
+    "minGameVersion": "1.0.0"
+  },
+  "dependencies": [],
+  "contentRoots": ["content"],
+  "patchFiles": ["patches/gameplay.json"],
+  "pak": {
+    "output": "dist/ExampleMod_P.pak",
+    "mountPoint": "../../../your-game/"
+  }
+}

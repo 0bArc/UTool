@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://csstratware.dev/schemas/asset-patch.schema.json",
+  "title": "UE4 Asset Patch",
+  "type": "object",
+  "required": ["patches"],
+  "properties": {
+    "patches": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["assetPath", "operations"],
+        "properties": {
+          "assetPath": {
+            "type": "string",
+            "description": "Unreal object path, e.g. /Game/Maps/Main.Main"
+          },
+          "operations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["op", "path"],
+              "properties": {
+                "op": {
+                  "type": "string",
+                  "enum": ["add", "replace", "remove"]
+                },
+                "path": { "type": "string" },
+                "value": {}
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

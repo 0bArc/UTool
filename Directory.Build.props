@@ -1,0 +1,14 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <Authors>csStratware</Authors>
+    <Company>csStratware</Company>
+    <Product>csStratware</Product>
+    <Version>0.1.0</Version>
+    <RootNamespace>CsStratware</RootNamespace>
+  </PropertyGroup>
+</Project>
