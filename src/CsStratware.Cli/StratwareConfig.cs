@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using CsStratware.Pak;
 
 namespace CsStratware.Cli;
 
@@ -29,6 +30,9 @@ public sealed class StratwareConfig
         ?? (string.IsNullOrWhiteSpace(IcarusPaksDir)
             ? ""
             : Path.GetFullPath(Path.Combine(IcarusPaksDir, "..", "Data", "data.pak")));
+
+    public UnrealPakToolchainPaths ResolveUnrealPakToolchain(bool ensureLocalCopy = true) =>
+        UnrealPakToolchain.Resolve(UnrealPak, UnrealEngineDir, ConfigDirectory, ensureLocalCopy);
 
     public string? ResolveDemoExtractedDir()
     {

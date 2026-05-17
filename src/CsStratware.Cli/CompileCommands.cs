@@ -54,11 +54,12 @@ internal static class CompileCommands
             if (sourcePak == "@icarus-data")
                 sourcePak = cfg.ResolveIcarusDataPak();
 
+            var toolchain = cfg.ResolveUnrealPakToolchain();
             var prepared = ModAssetPreparer.Prepare(package, new ModPrepareOptions
             {
                 SourcePakPath = sourcePak,
                 ExtractedDir = cfg.ResolveDemoExtractedDir(),
-                UnrealPakExecutable = cfg.UnrealPak,
+                UnrealPakExecutable = toolchain.Executable,
                 CompiledAssemblyPath = result.AssemblyPath,
                 ForceExtract = HasFlag(args, "--force-extract"),
             });

@@ -178,11 +178,12 @@ internal static class PakCommands
             if (sourcePak == "@icarus-data")
                 sourcePak = cfg.ResolveIcarusDataPak();
 
+            var toolchain = cfg.ResolveUnrealPakToolchain();
             var prepared = ModAssetPreparer.Prepare(package, new ModPrepareOptions
             {
                 SourcePakPath = sourcePak,
                 ExtractedDir = cfg.ResolveDemoExtractedDir(),
-                UnrealPakExecutable = cfg.UnrealPak,
+                UnrealPakExecutable = toolchain.Executable,
                 CompiledAssemblyPath = compiledAssembly,
                 ForceExtract = HasFlag(args, "--force-extract"),
             });
@@ -209,14 +210,7 @@ internal static class PakCommands
 
         if (useUePack)
         {
-            var ue = new UnrealPakOptions
-            {
-                ExecutablePath = cfg.UnrealPak,
-                EngineDir = cfg.UnrealEngineDir
-                    ?? (string.IsNullOrWhiteSpace(cfg.IcarusPaksDir)
-                        ? null
-                        : Path.GetFullPath(Path.Combine(cfg.IcarusPaksDir, "..", "..", "..", "..", "Engine"))),
-            };
+            var ue = UnrealPakToolchain.ToOptions(cfg.ResolveUnrealPakToolchain());
             UnrealPakRunner.PackDirectory(contentRoot, output, mount, HasFlag(args, "-compress"), ue);
             Console.WriteLine($"Built mod pak (UnrealPak): {Path.GetFullPath(output)}");
             return 0;
@@ -387,7 +381,7 @@ internal static class PakCommands
         var pak = args[0];
         var outDir = args[1];
         var filter = GetArg(args, "--filter") ?? GetArg(args, "-f");
-        var ue = new UnrealPakOptions { ExecutablePath = cfg.UnrealPak };
+        var ue = UnrealPakToolchain.ToOptions(cfg.ResolveUnrealPakToolchain());
         UnrealPakRunner.Extract(pak, outDir, filter, ue);
         Console.WriteLine($"UnrealPak extract -> {Path.GetFullPath(outDir)}");
         return 0;
@@ -405,7 +399,7 @@ internal static class PakCommands
 
         var cfg = StratwareConfig.Load();
         var mount = GetArg(args, "--mount") ?? cfg.IcarusMountPoint ?? "../../../Icarus/";
-        var ue = new UnrealPakOptions { ExecutablePath = cfg.UnrealPak };
+        var ue = UnrealPakToolchain.ToOptions(cfg.ResolveUnrealPakToolchain());
         UnrealPakRunner.PackDirectory(content, output, mount, HasFlag(args, "-compress"), ue);
         Console.WriteLine($"UnrealPak pack -> {Path.GetFullPath(output)}");
         return 0;

@@ -24,6 +24,8 @@ Thumbs.db
 *.local.json
 .env
 secrets.json
+csstratware.json
+tools/UnrealPak/
 
 ## Test / coverage
 TestResults/

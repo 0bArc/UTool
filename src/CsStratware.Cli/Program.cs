@@ -12,6 +12,7 @@ static void PrintUsage()
           csmanager validate <mods-dir>          Validate mod manifests and layout
           csmanager compile <mod-dir> [--prepare]  Build mod C# patches (compile help)
           csmanager pak <subcommand> [args...]   UE4 .pak tools (pak help)
+          csmanager setup <subcommand>           Install tools (setup help)
           csmanager help                         Show this help
         """);
 }
@@ -29,6 +30,9 @@ if (command == "pak")
 
 if (command == "compile")
     return CompileCommands.Run(args[1..]);
+
+if (command == "setup")
+    return SetupCommands.Run(args[1..]);
 
 var modsDir = args.Length > 1 ? args[1] : Path.Combine(Directory.GetCurrentDirectory(), "mods");
 

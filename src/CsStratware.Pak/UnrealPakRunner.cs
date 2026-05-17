@@ -23,9 +23,14 @@ public static class UnrealPakRunner
         if (!string.IsNullOrWhiteSpace(fromEnv) && File.Exists(fromEnv))
             return Path.GetFullPath(fromEnv);
 
+        foreach (var store in UnrealPakToolchain.EnumerateStoreRoots(null))
+        {
+            if (UnrealPakToolchain.TryFromStore(store, out var local))
+                return local.Executable;
+        }
+
         var common = new[]
         {
-            @"D:\SteamLibrary\steamapps\common\Icarus\modmanager\UnrealPak\Engine\Binaries\Win64\UnrealPak.exe",
             @"C:\software\UnrealPak.exe",
             @"C:\Program Files\Epic Games\UE_5.4\Engine\Binaries\Win64\UnrealPak.exe",
             @"C:\Program Files\Epic Games\UE_5.3\Engine\Binaries\Win64\UnrealPak.exe",
@@ -42,7 +47,8 @@ public static class UnrealPakRunner
         }
 
         throw new FileNotFoundException(
-            "UnrealPak.exe not found. Set CSSTRATWARE_UNREALPAK or csstratware.json unrealPak path.");
+            "UnrealPak.exe not found. Install Icarus Mod Manager, run " +
+            "'csmanager setup unrealpak', or set CSSTRATWARE_UNREALPAK / csstratware.json unrealPak.");
     }
 
     public static void Extract(

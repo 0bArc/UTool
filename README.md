@@ -52,5 +52,30 @@ Sibling repo **[csStratwareDemo](../csStratwareDemo)** — `mods/processor-850` 
 
 ## Config
 
-Workspace `csstratware.json` (walks up from cwd): `unrealPak`, `icarusDataPak`, `icarusPaksDir`, …  
-Env: `CSSTRATWARE_UNREALPAK` overrides `unrealPak`.
+Copy [csstratware.json.example](csstratware.json.example) → `csstratware.json` (gitignored) and set game paths.
+
+| Key | Purpose |
+|-----|---------|
+| `unrealPak` / `unrealEngineDir` | **Source** — Icarus Mod Manager’s UnrealPak tree (`.../modmanager/UnrealPak/Engine`) |
+| `icarusPaksDir`, `icarusDataPak` | Game paks (read/extract only) |
+| `icarusMountPoint` | UE virtual mount in packed mods (`../../../Icarus/...` — game convention, not a disk path) |
+
+### UnrealPak (required for Icarus `*_P.pak` mods)
+
+csStratware does **not** ship UnrealPak. Use the copy bundled with **[Icarus Mod Manager](https://github.com/DonovanMods/icarus-mod-manager)** (Steam: `Icarus/modmanager/UnrealPak/Engine`).
+
+One-time install into a **local store** (no `../../../../` walks to find Engine):
+
+```powershell
+copy csstratware.json.example csstratware.json   # edit unrealEngineDir
+csmanager setup unrealpak
+```
+
+Stores (first hit wins):
+
+1. `<project>/tools/UnrealPak/Engine/` — next to `csstratware.json`
+2. `%LocalAppData%\csmanager\UnrealPak\Engine\` — fallback (`setup unrealpak --appdata`)
+
+After copy, `unrealPak` / `unrealEngineDir` in config are only needed as **copy sources**; CLI resolves the local toolchain automatically.
+
+Env override: `CSSTRATWARE_UNREALPAK` → explicit `UnrealPak.exe` path.

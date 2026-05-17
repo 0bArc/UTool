@@ -93,3 +93,14 @@ csmanager pak list|extract|ue extract|pack ...
 ```
 
 Game paths: workspace `csstratware.json` (demo) or env; Icarus shortcuts `@icarus`, `@icarus-data`.
+
+### UnrealPak setup
+
+Icarus override paks need **Icarus Mod Manager’s** UnrealPak (not Epic’s generic build). Copy once:
+
+```powershell
+csmanager setup unrealpak    # uses csstratware.json unrealEngineDir
+csmanager setup help
+```
+
+Local copy → `tools/UnrealPak/` (project) or `%LocalAppData%\csmanager\UnrealPak\`. See root [README](../README.md#unrealpak-required-for-icarus-_p_pak-mods).
