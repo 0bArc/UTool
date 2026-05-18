@@ -380,13 +380,13 @@ internal static class PakCommands
 
     private static int UeExtract(string[] args)
     {
-        if (args.Length < 3)
+        if (args.Length < 2)
             return Missing("ue extract <pak> <out-dir> [--filter wildcard]");
 
         var cfg = StratwareConfig.Load();
         var pak = args[0];
         var outDir = args[1];
-        var filter = GetArg(args, "--filter") ?? GetArg(args, "-f");
+        var filter = GetArg(args, "--filter") ?? GetArg(args, "-filter") ?? GetArg(args, "-f");
         var ue = UnrealPakToolchain.ToOptions(cfg.ResolveUnrealPakToolchain());
         UnrealPakRunner.Extract(pak, outDir, filter, ue);
         Console.WriteLine($"UnrealPak extract -> {Path.GetFullPath(outDir)}");
