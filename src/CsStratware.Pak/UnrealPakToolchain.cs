@@ -9,6 +9,8 @@ public sealed class UnrealPakToolchainPaths
 
 public static class UnrealPakToolchain
 {
+    /// <summary>Legacy manual install; bundled <c>assets/UnrealPak.zip</c> is preferred.</summary>
+    public const string DefaultInstallRoot = @"C:\software\UnrealPak";
     public const string BundleFolderName = "UnrealPak";
     public const string RelativeExecutable = @"Engine\Binaries\Win64\UnrealPak.exe";
 
@@ -24,13 +26,16 @@ public static class UnrealPakToolchain
         string? configDirectory = null,
         bool ensureLocalCopy = true)
     {
+        if (ensureLocalCopy)
+            UnrealPakBundle.TryEnsureExtracted(configDirectory);
+
         foreach (var store in EnumerateStoreRoots(configDirectory))
         {
             if (TryFromStore(store, out var local))
                 return local;
         }
 
-        var sourceEngine = InferSourceEngineDir(configExecutable, configEngineDir);
+        var sourceEngine = InferSourceEngineDir(configExecutable, configEngineDir, configDirectory);
         if (ensureLocalCopy && sourceEngine is not null)
         {
             var targetStore = PickWritableStore(configDirectory);
@@ -95,6 +100,10 @@ public static class UnrealPakToolchain
 
     public static IEnumerable<string> EnumerateStoreRoots(string? configDirectory)
     {
+        var bundled = UnrealPakBundle.TryResolveStoreRoot(configDirectory);
+        if (!string.IsNullOrWhiteSpace(bundled))
+            yield return bundled;
+
         if (!string.IsNullOrWhiteSpace(configDirectory))
         {
             yield return Path.Combine(configDirectory, "tools", BundleFolderName);
@@ -109,9 +118,15 @@ public static class UnrealPakToolchain
         }
 
         yield return AppDataStoreRoot;
+
+        if (Directory.Exists(DefaultInstallRoot))
+            yield return DefaultInstallRoot;
     }
 
-    public static string? InferSourceEngineDir(string? configExecutable, string? configEngineDir)
+    public static string? InferSourceEngineDir(
+        string? configExecutable,
+        string? configEngineDir,
+        string? configDirectory = null)
     {
         if (!string.IsNullOrWhiteSpace(configEngineDir) && Directory.Exists(configEngineDir))
             return Path.GetFullPath(configEngineDir);
@@ -119,7 +134,30 @@ public static class UnrealPakToolchain
         if (!string.IsNullOrWhiteSpace(configExecutable) && File.Exists(configExecutable))
             return TryInferEngineDirFromExecutable(configExecutable);
 
+        return TryDefaultEngineDir(configDirectory);
+    }
+
+    public static string? TryDefaultEngineDir(string? configDirectory = null)
+    {
+        UnrealPakBundle.TryEnsureExtracted(configDirectory);
+        var bundled = UnrealPakBundle.TryResolveStoreRoot(configDirectory);
+        if (!string.IsNullOrWhiteSpace(bundled) && TryFromStore(bundled, out var paths))
+            return paths.EngineDir;
+
+        foreach (var candidate in DefaultEngineDirCandidates())
+        {
+            var exe = Path.Combine(candidate, "Binaries", "Win64", "UnrealPak.exe");
+            if (File.Exists(exe))
+                return Path.GetFullPath(candidate);
+        }
+
         return null;
+    }
+
+    private static IEnumerable<string> DefaultEngineDirCandidates()
+    {
+        yield return Path.Combine(DefaultInstallRoot, "Engine");
+        yield return DefaultInstallRoot;
     }
 
     public static string PickWritableStore(string? configDirectory)
@@ -161,7 +199,7 @@ public static class UnrealPakToolchain
         {
             throw new FileNotFoundException(
                 "Source engine folder must contain Binaries/Win64/UnrealPak.exe " +
-                "(Icarus Mod Manager ships this under modmanager/UnrealPak/Engine).",
+                $"(bundle: assets/{UnrealPakBundle.ZipFileName}, or legacy {DefaultInstallRoot}).",
                 exe);
         }
     }

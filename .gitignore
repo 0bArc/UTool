@@ -26,6 +26,7 @@ Thumbs.db
 secrets.json
 csstratware.json
 tools/UnrealPak/
+assets/UnrealPak/
 
 ## Test / coverage
 TestResults/

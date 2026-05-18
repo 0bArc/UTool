@@ -12,7 +12,7 @@
 | **CsStratware.ModLoader** | `mod.json` discovery, JSON patches, compile & run C# patches |
 | **CsStratware.Pak** | Pak index/search, UnrealPak wrap, `build-mod` prepare stage |
 | **CsStratware.Cli** | **`csmanager`** executable (`list`, `validate`, `compile`, `pak`) |
-| **CsStratware.Tests** | xUnit tests (Infrastructure, Pak, Sdk) |
+
 
 Dependency flow: **Cli** → Pak, ModLoader → **Infrastructure**, **Sdk** → Core.
 
@@ -138,11 +138,10 @@ Game paths: workspace `csstratware.json` (demo) or env; Icarus shortcuts `@icaru
 
 ### UnrealPak setup
 
-Icarus override paks need **Icarus Mod Manager’s** UnrealPak (not Epic’s generic build). Copy once:
+Bundled **`assets/UnrealPak.zip`** → **`assets/UnrealPak/`** on first use:
 
 ```powershell
-csmanager setup unrealpak    # uses csstratware.json unrealEngineDir
-csmanager setup help
+csmanager setup unrealpak
 ```
 
-Local copy → `tools/UnrealPak/` (project) or `%LocalAppData%\csmanager\UnrealPak\`. See root [README](../README.md#unrealpak-required-for-icarus-_p_pak-mods).
+Also `tools/UnrealPak/`, `%LocalAppData%\csmanager\UnrealPak\`, legacy `C:\software\UnrealPak`. See root [README](../README.md#unrealpak-icarus-_p_pak-mods).

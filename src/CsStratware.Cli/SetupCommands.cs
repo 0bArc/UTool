@@ -10,12 +10,8 @@ internal static class SetupCommands
             setup commands:
               csmanager setup unrealpak [--from <Engine-dir>] [--force] [--appdata]
 
-            Copies Icarus Mod Manager's UnrealPak Engine tree into a local store:
-              <project>/tools/UnrealPak/   (when csstratware.json is in cwd tree)
-              %LocalAppData%/csmanager/UnrealPak/   (fallback, or with --appdata)
-
-            One-time: install Icarus Mod Manager, then point --from at its Engine folder
-            or set unrealEngineDir / unrealPak in csstratware.json and run without --from.
+            Extracts bundled assets/UnrealPak.zip into assets/UnrealPak/ (csStratware repo),
+            or copies an Engine tree with --from into tools/UnrealPak or %LocalAppData%/csmanager/UnrealPak/.
             """);
     }
 
@@ -50,25 +46,44 @@ internal static class SetupCommands
     {
         var cfg = StratwareConfig.Load();
         var from = GetArg(args, "--from");
+        var force = HasFlag(args, "--force");
+
+        if (string.IsNullOrWhiteSpace(from))
+        {
+            if (UnrealPakBundle.TryEnsureExtracted(cfg.ConfigDirectory, force))
+            {
+                var bundled = UnrealPakToolchain.Resolve(
+                    cfg.UnrealPak,
+                    cfg.UnrealEngineDir,
+                    cfg.ConfigDirectory,
+                    ensureLocalCopy: false);
+                Console.WriteLine("UnrealPak ready (bundled assets):");
+                Console.WriteLine($"  store:  {bundled.StoreRoot}");
+                Console.WriteLine($"  engine: {bundled.EngineDir}");
+                Console.WriteLine($"  exe:    {bundled.Executable}");
+                return 0;
+            }
+        }
+
         var sourceEngine = ResolveSourceEngineArg(from)
-            ?? UnrealPakToolchain.InferSourceEngineDir(cfg.UnrealPak, cfg.UnrealEngineDir);
+            ?? UnrealPakToolchain.InferSourceEngineDir(cfg.UnrealPak, cfg.UnrealEngineDir, cfg.ConfigDirectory)
+            ?? UnrealPakToolchain.TryDefaultEngineDir(cfg.ConfigDirectory);
         if (sourceEngine is null)
         {
             Console.Error.WriteLine(
-                "No source Engine folder. Use --from <path/to/Engine> or csstratware.json " +
-                "unrealEngineDir / unrealPak (Icarus Mod Manager: .../modmanager/UnrealPak/Engine).");
+                "No UnrealPak source. Clone csStratware with assets/UnrealPak.zip, or use " +
+                "--from <path/to/Engine> / csstratware.json unrealEngineDir.");
             return 1;
         }
 
         var preferAppData = HasFlag(args, "--appdata");
-        var force = HasFlag(args, "--force");
         Console.WriteLine($"Source: {sourceEngine}");
         var paths = UnrealPakToolchain.SyncFromSource(
             sourceEngine,
             cfg.ConfigDirectory,
             force,
             preferAppData);
-        Console.WriteLine($"UnrealPak ready:");
+        Console.WriteLine("UnrealPak ready:");
         Console.WriteLine($"  store:  {paths.StoreRoot}");
         Console.WriteLine($"  engine: {paths.EngineDir}");
         Console.WriteLine($"  exe:    {paths.Executable}");

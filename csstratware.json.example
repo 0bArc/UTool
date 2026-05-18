@@ -1,6 +1,4 @@
 {
-  "unrealPak": "D:\\SteamLibrary\\steamapps\\common\\Icarus\\modmanager\\UnrealPak\\Engine\\Binaries\\Win64\\UnrealPak.exe",
-  "unrealEngineDir": "D:\\SteamLibrary\\steamapps\\common\\Icarus\\modmanager\\UnrealPak\\Engine",
   "icarusPaksDir": "D:\\SteamLibrary\\steamapps\\common\\Icarus\\Icarus\\Content\\Paks",
   "icarusDataPak": "D:\\SteamLibrary\\steamapps\\common\\Icarus\\Icarus\\Content\\Data\\data.pak",
   "demoExtractedDir": "extracted",
