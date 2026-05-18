@@ -59,6 +59,8 @@ public static class UnrealPakRunner
         string? filter = null,
         UnrealPakOptions? options = null)
     {
+        pakPath = Path.GetFullPath(pakPath);
+        outputDirectory = Path.GetFullPath(outputDirectory);
         Directory.CreateDirectory(outputDirectory);
         var args = new List<string>
         {
