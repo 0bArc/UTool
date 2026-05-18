@@ -847,12 +847,8 @@ internal static class SetupCommands
             setup commands:
               csmanager setup unrealpak [--from <Engine-dir>] [--force] [--appdata]
 
-            Copies Icarus Mod Manager's UnrealPak Engine tree into a local store:
-              <project>/tools/UnrealPak/   (when csstratware.json is in cwd tree)
-              %LocalAppData%/csmanager/UnrealPak/   (fallback, or with --appdata)
-
-            One-time: install Icarus Mod Manager, then point --from at its Engine folder
-            or set unrealEngineDir / unrealPak in csstratware.json and run without --from.
+            Extracts bundled assets/UnrealPak.zip into assets/UnrealPak/ (csStratware repo),
+            or copies an Engine tree with --from into tools/UnrealPak or %LocalAppData%/csmanager/UnrealPak/.
             """);
     }
 
@@ -887,25 +883,44 @@ internal static class SetupCommands
     {
         var cfg = StratwareConfig.Load();
         var from = GetArg(args, "--from");
+        var force = HasFlag(args, "--force");
+
+        if (string.IsNullOrWhiteSpace(from))
+        {
+            if (UnrealPakBundle.TryEnsureExtracted(cfg.ConfigDirectory, force))
+            {
+                var bundled = UnrealPakToolchain.Resolve(
+                    cfg.UnrealPak,
+                    cfg.UnrealEngineDir,
+                    cfg.ConfigDirectory,
+                    ensureLocalCopy: false);
+                Console.WriteLine("UnrealPak ready (bundled assets):");
+                Console.WriteLine($"  store:  {bundled.StoreRoot}");
+                Console.WriteLine($"  engine: {bundled.EngineDir}");
+                Console.WriteLine($"  exe:    {bundled.Executable}");
+                return 0;
+            }
+        }
+
         var sourceEngine = ResolveSourceEngineArg(from)
-            ?? UnrealPakToolchain.InferSourceEngineDir(cfg.UnrealPak, cfg.UnrealEngineDir);
+            ?? UnrealPakToolchain.InferSourceEngineDir(cfg.UnrealPak, cfg.UnrealEngineDir, cfg.ConfigDirectory)
+            ?? UnrealPakToolchain.TryDefaultEngineDir(cfg.ConfigDirectory);
         if (sourceEngine is null)
         {
             Console.Error.WriteLine(
-                "No source Engine folder. Use --from <path/to/Engine> or csstratware.json " +
-                "unrealEngineDir / unrealPak (Icarus Mod Manager: .../modmanager/UnrealPak/Engine).");
+                "No UnrealPak source. Clone csStratware with assets/UnrealPak.zip, or use " +
+                "--from <path/to/Engine> / csstratware.json unrealEngineDir.");
             return 1;
         }
 
         var preferAppData = HasFlag(args, "--appdata");
-        var force = HasFlag(args, "--force");
         Console.WriteLine($"Source: {sourceEngine}");
         var paths = UnrealPakToolchain.SyncFromSource(
             sourceEngine,
             cfg.ConfigDirectory,
             force,
             preferAppData);
-        Console.WriteLine($"UnrealPak ready:");
+        Console.WriteLine("UnrealPak ready:");
         Console.WriteLine($"  store:  {paths.StoreRoot}");
         Console.WriteLine($"  engine: {paths.EngineDir}");
         Console.WriteLine($"  exe:    {paths.Executable}");
@@ -1092,7 +1107,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyDescriptionAttribute("Developer CLI for csStratware mods.")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("0.1.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("0.1.0+401f93b1c945b2165f191855372514f240192a3d")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("0.1.0+71141da39f048bde7df1d514469b596b14b901e1")]
 [assembly: System.Reflection.AssemblyProductAttribute("csStratware")]
 [assembly: System.Reflection.AssemblyTitleAttribute("csmanager")]
 [assembly: System.Reflection.AssemblyVersionAttribute("0.1.0.0")]
@@ -1315,7 +1330,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyDescriptionAttribute("Core types and contracts for the csStratware UE4 modding framework.")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("0.1.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("0.1.0+401f93b1c945b2165f191855372514f240192a3d")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("0.1.0+71141da39f048bde7df1d514469b596b14b901e1")]
 [assembly: System.Reflection.AssemblyProductAttribute("csStratware")]
 [assembly: System.Reflection.AssemblyTitleAttribute("CsStratware.Core")]
 [assembly: System.Reflection.AssemblyVersionAttribute("0.1.0.0")]
@@ -2045,7 +2060,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyDescriptionAttribute(("Cross-cutting infrastructure: caching, IO, logging, incremental builds, security " +
     "hooks."))]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("0.1.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("0.1.0+401f93b1c945b2165f191855372514f240192a3d")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("0.1.0+71141da39f048bde7df1d514469b596b14b901e1")]
 [assembly: System.Reflection.AssemblyProductAttribute("csStratware")]
 [assembly: System.Reflection.AssemblyTitleAttribute("CsStratware.Infrastructure")]
 [assembly: System.Reflection.AssemblyVersionAttribute("0.1.0.0")]
@@ -2888,7 +2903,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyDescriptionAttribute("JSON mod discovery, validation, and load pipeline.")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("0.1.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("0.1.0+401f93b1c945b2165f191855372514f240192a3d")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("0.1.0+71141da39f048bde7df1d514469b596b14b901e1")]
 [assembly: System.Reflection.AssemblyProductAttribute("csStratware")]
 [assembly: System.Reflection.AssemblyTitleAttribute("CsStratware.ModLoader")]
 [assembly: System.Reflection.AssemblyVersionAttribute("0.1.0.0")]
@@ -4862,6 +4877,122 @@ public static class StreamingPakGrep
 }
 
 // ==========================================
+// FILE: F:\Data\personal\c#\csStratware\src\CsStratware.Pak\UnrealPakBundle.cs
+// ==========================================
+using System.IO.Compression;
+
+namespace CsStratware.Pak;
+
+public static class UnrealPakBundle
+{
+    public const string AssetsFolderName = "assets";
+    public const string ZipFileName = "UnrealPak.zip";
+    public const string LegacyZipRelative = ".required/UnrealPak.zip";
+
+    public static string? TryFindRepoRoot(string? configDirectory = null)
+    {
+        foreach (var start in CandidateRoots(configDirectory))
+        {
+            var dir = start;
+            for (var i = 0; i < 14 && !string.IsNullOrEmpty(dir); i++)
+            {
+                if (File.Exists(Path.Combine(dir, "csStratware.sln")))
+                    return Path.GetFullPath(dir);
+
+                if (TryResolveZipPath(dir) is not null)
+                    return Path.GetFullPath(dir);
+
+                dir = Directory.GetParent(dir)?.FullName;
+            }
+        }
+
+        return null;
+    }
+
+    public static string? TryResolveZipPath(string? repoRoot)
+    {
+        if (string.IsNullOrWhiteSpace(repoRoot))
+            return null;
+
+        var primary = Path.Combine(repoRoot, AssetsFolderName, ZipFileName);
+        if (File.Exists(primary))
+            return primary;
+
+        var legacy = Path.Combine(repoRoot, LegacyZipRelative.Replace('/', Path.DirectorySeparatorChar));
+        return File.Exists(legacy) ? legacy : null;
+    }
+
+    public static string? TryResolveStoreRoot(string? configDirectory = null)
+    {
+        var repo = TryFindRepoRoot(configDirectory);
+        return repo is null
+            ? null
+            : Path.Combine(repo, AssetsFolderName, UnrealPakToolchain.BundleFolderName);
+    }
+
+    public static bool TryEnsureExtracted(string? configDirectory = null, bool force = false)
+    {
+        var repo = TryFindRepoRoot(configDirectory);
+        if (repo is null)
+            return false;
+
+        var zipPath = TryResolveZipPath(repo);
+        if (zipPath is null)
+            return false;
+
+        var storeRoot = Path.Combine(repo, AssetsFolderName, UnrealPakToolchain.BundleFolderName);
+        var exe = Path.Combine(storeRoot, UnrealPakToolchain.RelativeExecutable);
+        if (!force && File.Exists(exe) && File.GetLastWriteTimeUtc(exe) >= File.GetLastWriteTimeUtc(zipPath))
+            return true;
+
+        ExtractZip(zipPath, Path.Combine(repo, AssetsFolderName));
+        return File.Exists(exe);
+    }
+
+    private static void ExtractZip(string zipPath, string extractRoot)
+    {
+        Directory.CreateDirectory(extractRoot);
+        using var archive = ZipFile.OpenRead(zipPath);
+        foreach (var entry in archive.Entries)
+        {
+            if (string.IsNullOrEmpty(entry.Name))
+                continue;
+
+            var target = Path.Combine(extractRoot, entry.FullName.Replace('/', Path.DirectorySeparatorChar));
+            var parent = Path.GetDirectoryName(target);
+            if (!string.IsNullOrEmpty(parent))
+                Directory.CreateDirectory(parent);
+
+            entry.ExtractToFile(target, overwrite: true);
+        }
+    }
+
+    private static IEnumerable<string> CandidateRoots(string? configDirectory)
+    {
+        if (!string.IsNullOrWhiteSpace(configDirectory))
+            yield return configDirectory;
+
+        var processDir = GetProcessDirectory();
+        if (!string.IsNullOrWhiteSpace(processDir))
+            yield return processDir;
+
+        yield return Directory.GetCurrentDirectory();
+
+        var fromEnv = Environment.GetEnvironmentVariable("CSSTRATWARE_ROOT");
+        if (!string.IsNullOrWhiteSpace(fromEnv))
+            yield return fromEnv;
+    }
+
+    private static string? GetProcessDirectory()
+    {
+        var processPath = Environment.ProcessPath;
+        return string.IsNullOrWhiteSpace(processPath)
+            ? null
+            : Path.GetDirectoryName(processPath);
+    }
+}
+
+// ==========================================
 // FILE: F:\Data\personal\c#\csStratware\src\CsStratware.Pak\UnrealPakExtractionPipeline.cs
 // ==========================================
 using CsStratware.Infrastructure.Caching;
@@ -4948,9 +5079,11 @@ public static class UnrealPakRunner
                 return local.Executable;
         }
 
+        var root = UnrealPakToolchain.DefaultInstallRoot;
         var common = new[]
         {
-            @"C:\software\UnrealPak.exe",
+            Path.Combine(root, "Engine", "Binaries", "Win64", "UnrealPak.exe"),
+            Path.Combine(root, "Binaries", "Win64", "UnrealPak.exe"),
             @"C:\Program Files\Epic Games\UE_5.4\Engine\Binaries\Win64\UnrealPak.exe",
             @"C:\Program Files\Epic Games\UE_5.3\Engine\Binaries\Win64\UnrealPak.exe",
             @"C:\Program Files\Epic Games\UE_5.2\Engine\Binaries\Win64\UnrealPak.exe",
@@ -4966,8 +5099,8 @@ public static class UnrealPakRunner
         }
 
         throw new FileNotFoundException(
-            "UnrealPak.exe not found. Install Icarus Mod Manager, run " +
-            "'csmanager setup unrealpak', or set CSSTRATWARE_UNREALPAK / csstratware.json unrealPak.");
+            "UnrealPak.exe not found. Ensure assets/UnrealPak.zip exists in the csStratware repo " +
+            "(auto-extracts on first use), run 'csmanager setup unrealpak', or set CSSTRATWARE_UNREALPAK.");
     }
 
     public static void Extract(
@@ -5106,6 +5239,8 @@ public sealed class UnrealPakToolchainPaths
 
 public static class UnrealPakToolchain
 {
+    /// <summary>Legacy manual install; bundled <c>assets/UnrealPak.zip</c> is preferred.</summary>
+    public const string DefaultInstallRoot = @"C:\software\UnrealPak";
     public const string BundleFolderName = "UnrealPak";
     public const string RelativeExecutable = @"Engine\Binaries\Win64\UnrealPak.exe";
 
@@ -5121,13 +5256,16 @@ public static class UnrealPakToolchain
         string? configDirectory = null,
         bool ensureLocalCopy = true)
     {
+        if (ensureLocalCopy)
+            UnrealPakBundle.TryEnsureExtracted(configDirectory);
+
         foreach (var store in EnumerateStoreRoots(configDirectory))
         {
             if (TryFromStore(store, out var local))
                 return local;
         }
 
-        var sourceEngine = InferSourceEngineDir(configExecutable, configEngineDir);
+        var sourceEngine = InferSourceEngineDir(configExecutable, configEngineDir, configDirectory);
         if (ensureLocalCopy && sourceEngine is not null)
         {
             var targetStore = PickWritableStore(configDirectory);
@@ -5192,6 +5330,10 @@ public static class UnrealPakToolchain
 
     public static IEnumerable<string> EnumerateStoreRoots(string? configDirectory)
     {
+        var bundled = UnrealPakBundle.TryResolveStoreRoot(configDirectory);
+        if (!string.IsNullOrWhiteSpace(bundled))
+            yield return bundled;
+
         if (!string.IsNullOrWhiteSpace(configDirectory))
         {
             yield return Path.Combine(configDirectory, "tools", BundleFolderName);
@@ -5206,9 +5348,15 @@ public static class UnrealPakToolchain
         }
 
         yield return AppDataStoreRoot;
+
+        if (Directory.Exists(DefaultInstallRoot))
+            yield return DefaultInstallRoot;
     }
 
-    public static string? InferSourceEngineDir(string? configExecutable, string? configEngineDir)
+    public static string? InferSourceEngineDir(
+        string? configExecutable,
+        string? configEngineDir,
+        string? configDirectory = null)
     {
         if (!string.IsNullOrWhiteSpace(configEngineDir) && Directory.Exists(configEngineDir))
             return Path.GetFullPath(configEngineDir);
@@ -5216,7 +5364,30 @@ public static class UnrealPakToolchain
         if (!string.IsNullOrWhiteSpace(configExecutable) && File.Exists(configExecutable))
             return TryInferEngineDirFromExecutable(configExecutable);
 
+        return TryDefaultEngineDir(configDirectory);
+    }
+
+    public static string? TryDefaultEngineDir(string? configDirectory = null)
+    {
+        UnrealPakBundle.TryEnsureExtracted(configDirectory);
+        var bundled = UnrealPakBundle.TryResolveStoreRoot(configDirectory);
+        if (!string.IsNullOrWhiteSpace(bundled) && TryFromStore(bundled, out var paths))
+            return paths.EngineDir;
+
+        foreach (var candidate in DefaultEngineDirCandidates())
+        {
+            var exe = Path.Combine(candidate, "Binaries", "Win64", "UnrealPak.exe");
+            if (File.Exists(exe))
+                return Path.GetFullPath(candidate);
+        }
+
         return null;
+    }
+
+    private static IEnumerable<string> DefaultEngineDirCandidates()
+    {
+        yield return Path.Combine(DefaultInstallRoot, "Engine");
+        yield return DefaultInstallRoot;
     }
 
     public static string PickWritableStore(string? configDirectory)
@@ -5258,7 +5429,7 @@ public static class UnrealPakToolchain
         {
             throw new FileNotFoundException(
                 "Source engine folder must contain Binaries/Win64/UnrealPak.exe " +
-                "(Icarus Mod Manager ships this under modmanager/UnrealPak/Engine).",
+                $"(bundle: assets/{UnrealPakBundle.ZipFileName}, or legacy {DefaultInstallRoot}).",
                 exe);
         }
     }
@@ -5564,7 +5735,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyDescriptionAttribute("UE4 .pak read, build, and patch support for csStratware.")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("0.1.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("0.1.0+401f93b1c945b2165f191855372514f240192a3d")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("0.1.0+71141da39f048bde7df1d514469b596b14b901e1")]
 [assembly: System.Reflection.AssemblyProductAttribute("csStratware")]
 [assembly: System.Reflection.AssemblyTitleAttribute("CsStratware.Pak")]
 [assembly: System.Reflection.AssemblyVersionAttribute("0.1.0.0")]
@@ -5791,7 +5962,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyDescriptionAttribute("Authoring SDK for csStratware code mods (JSON asset patches).")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("0.1.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("0.1.0+401f93b1c945b2165f191855372514f240192a3d")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("0.1.0+71141da39f048bde7df1d514469b596b14b901e1")]
 [assembly: System.Reflection.AssemblyProductAttribute("csStratware")]
 [assembly: System.Reflection.AssemblyTitleAttribute("CsStratware.Sdk")]
 [assembly: System.Reflection.AssemblyVersionAttribute("0.1.0.0")]
@@ -5881,7 +6052,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("csStratware")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("0.1.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("0.1.0+401f93b1c945b2165f191855372514f240192a3d")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("0.1.0+71141da39f048bde7df1d514469b596b14b901e1")]
 [assembly: System.Reflection.AssemblyProductAttribute("csStratware")]
 [assembly: System.Reflection.AssemblyTitleAttribute("CsStratware.Tests")]
 [assembly: System.Reflection.AssemblyVersionAttribute("0.1.0.0")]
