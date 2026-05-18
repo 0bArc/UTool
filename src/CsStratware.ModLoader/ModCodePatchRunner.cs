@@ -1,5 +1,5 @@
 using System.Reflection;
-using System.Runtime.Loader;
+using CsStratware.Infrastructure.Security;
 using CsStratware.Sdk;
 using SdkAssetPatch = CsStratware.Sdk.AssetPatch;
 
@@ -14,18 +14,20 @@ public sealed class CodeAssetPatch
 
 public static class ModCodePatchRunner
 {
-    public static IReadOnlyList<CodeAssetPatch> LoadFromAssembly(string assemblyPath)
-    {
-        var fullPath = Path.GetFullPath(assemblyPath);
-        var loadDir = Path.GetDirectoryName(fullPath)!;
-        var context = new AssemblyLoadContext($"csstratware-mod-{Path.GetFileNameWithoutExtension(fullPath)}", isCollectible: true);
-        context.Resolving += (_, name) =>
-        {
-            var candidate = Path.Combine(loadDir, $"{name.Name}.dll");
-            return File.Exists(candidate) ? context.LoadFromAssemblyPath(candidate) : null;
-        };
+    private static readonly Dictionary<string, ModAssemblySandbox> ActiveSandboxes = new(StringComparer.OrdinalIgnoreCase);
 
-        var assembly = context.LoadFromAssemblyPath(fullPath);
+    public static IReadOnlyList<CodeAssetPatch> LoadFromAssembly(string assemblyPath, string? modId = null)
+    {
+        modId ??= Path.GetFileNameWithoutExtension(assemblyPath);
+        if (ActiveSandboxes.TryGetValue(modId, out var existing))
+        {
+            existing.Dispose();
+            ActiveSandboxes.Remove(modId);
+        }
+
+        var sandbox = new ModAssemblySandbox(modId, typeof(SdkAssetPatch).Assembly.GetName().Version?.ToString());
+        ActiveSandboxes[modId] = sandbox;
+        var assembly = sandbox.Load(assemblyPath);
         var patches = new List<CodeAssetPatch>();
 
         foreach (var type in assembly.GetTypes())
@@ -49,9 +51,15 @@ public static class ModCodePatchRunner
         }
 
         if (patches.Count == 0)
-            throw new InvalidOperationException($"No [PatchAsset] AssetPatch types found in {fullPath}");
+            throw new InvalidOperationException($"No [PatchAsset] AssetPatch types found in {assemblyPath}");
 
         return patches;
+    }
+
+    public static void UnloadMod(string modId)
+    {
+        if (ActiveSandboxes.Remove(modId, out var sandbox))
+            sandbox.Dispose();
     }
 
     public static string Apply(string sourceJson, SdkAssetPatch patch)

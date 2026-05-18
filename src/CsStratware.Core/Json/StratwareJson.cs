@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
 namespace CsStratware.Core.Json;
 
@@ -17,6 +18,7 @@ public static class StratwareJson
             WriteIndented = true,
         };
         options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+        options.TypeInfoResolver = new DefaultJsonTypeInfoResolver();
         return options;
     }
 }

@@ -7,14 +7,17 @@
 | Project | Role |
 |---------|------|
 | **CsStratware.Core** | `ModManifest`, patch models, shared JSON helpers |
+| **CsStratware.Infrastructure** | Caching, incremental builds, logging, parallel patch pipeline, mod sandbox |
 | **CsStratware.Sdk** | Mod author API — `AssetPatch`, `[PatchAsset]`, `JsonAssetEditor` |
 | **CsStratware.ModLoader** | Discover mods, apply JSON patches, compile/run C# patch DLLs |
 | **CsStratware.Pak** | Pak index/search, `ModAssetPreparer`, **UnrealPak** wrap, built-in `PakBuilder` for tooling |
 | **CsStratware.Cli** | **`csmanager`** executable |
 
 ```
-Cli → Pak, ModLoader → Sdk → Core
+Cli → Pak, ModLoader → Infrastructure, Sdk → Core
 ```
+
+See [src/README.md](src/README.md#csstratwareinfrastructure) for what Infrastructure provides.
 
 Icarus / UE4 override `*_P.pak` → **UnrealPak** (`useUnrealPak` or `sourcePak` in `mod.json`). Plain content-only packs can use the built-in C# `PakBuilder`.
 

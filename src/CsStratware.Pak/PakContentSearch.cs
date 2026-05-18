@@ -1,4 +1,4 @@
-using System.Text;
+using CsStratware.Infrastructure.Operations;
 using CsStratware.Pak.Models;
 
 namespace CsStratware.Pak;
@@ -21,18 +21,20 @@ public static class PakContentSearch
         int maxResults = 50,
         long maxEntryBytes = 32 * 1024 * 1024,
         IReadOnlyList<string>? extensions = null,
-        IReadOnlySet<string>? entryPaths = null)
+        IReadOnlySet<string>? entryPaths = null,
+        OperationContext? context = null)
     {
         var results = new List<PakContentMatch>();
         var extFilter = (extensions is { Count: > 0 } ? extensions : DefaultExtensions)
             .Select(e => e.StartsWith('.') ? e : "." + e)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var utf8 = Encoding.UTF8.GetBytes(needle);
-        var utf16 = Encoding.Unicode.GetBytes(needle);
+        var (utf8, utf16) = StreamingPakGrep.NeedleBytes(needle);
 
         using var stream = File.OpenRead(archive.FilePath);
         foreach (var entry in archive.Entries.Values.Where(e => !e.IsDeleted))
         {
+            context?.CancellationToken.ThrowIfCancellationRequested();
+
             if (entryPaths is not null && !entryPaths.Contains(entry.Path))
                 continue;
             if (!extFilter.Any(ext => entry.Path.EndsWith(ext, StringComparison.OrdinalIgnoreCase)))
@@ -40,29 +42,44 @@ public static class PakContentSearch
             if (entry.UncompressedSize <= 0 || entry.UncompressedSize > maxEntryBytes)
                 continue;
 
-            byte[] data;
             try
             {
-                data = PakEntryExtractor.ReadEntry(stream, entry, archive.Footer);
+                if (StreamingPakGrep.TrySearchEntry(stream, entry, archive.Footer, utf8, utf16, out var offset))
+                {
+                    results.Add(new PakContentMatch
+                    {
+                        PakPath = archive.FilePath,
+                        EntryPath = entry.Path,
+                        Offset = offset,
+                        UncompressedSize = entry.UncompressedSize,
+                    });
+                }
+                else
+                {
+                    var data = PakEntryExtractor.ReadEntry(stream, entry, archive.Footer);
+                    offset = BinarySpanSearch.IndexOf(data, utf8);
+                    if (offset < 0)
+                        offset = BinarySpanSearch.IndexOf(data, utf16);
+                    if (offset < 0)
+                        continue;
+
+                    results.Add(new PakContentMatch
+                    {
+                        PakPath = archive.FilePath,
+                        EntryPath = entry.Path,
+                        Offset = offset,
+                        UncompressedSize = entry.UncompressedSize,
+                    });
+                }
+            }
+            catch (NotSupportedException)
+            {
+                throw;
             }
             catch
             {
                 continue;
             }
-
-            var offset = IndexOf(data, utf8);
-            if (offset < 0)
-                offset = IndexOf(data, utf16);
-            if (offset < 0)
-                continue;
-
-            results.Add(new PakContentMatch
-            {
-                PakPath = archive.FilePath,
-                EntryPath = entry.Path,
-                Offset = offset,
-                UncompressedSize = entry.UncompressedSize,
-            });
 
             if (results.Count >= maxResults)
                 break;
@@ -75,13 +92,15 @@ public static class PakContentSearch
         string pakDirectory,
         string needle,
         int maxResults = 50,
-        string searchPattern = "*.pak")
+        string searchPattern = "*.pak",
+        OperationContext? context = null)
     {
         var results = new List<PakContentMatch>();
         foreach (var pakPath in Directory.EnumerateFiles(pakDirectory, searchPattern))
         {
-            var archive = PakArchiveReader.Open(pakPath);
-            foreach (var match in GrepFile(archive, needle, maxResults - results.Count))
+            context?.CancellationToken.ThrowIfCancellationRequested();
+            var archive = PakArchiveCache.Open(pakPath);
+            foreach (var match in GrepFile(archive, needle, maxResults - results.Count, context: context))
             {
                 results.Add(match);
                 if (results.Count >= maxResults)
@@ -90,19 +109,5 @@ public static class PakContentSearch
         }
 
         return results;
-    }
-
-    private static int IndexOf(ReadOnlySpan<byte> haystack, ReadOnlySpan<byte> needle)
-    {
-        if (needle.Length == 0 || haystack.Length < needle.Length)
-            return -1;
-
-        for (var i = 0; i <= haystack.Length - needle.Length; i++)
-        {
-            if (haystack.Slice(i, needle.Length).SequenceEqual(needle))
-                return i;
-        }
-
-        return -1;
     }
 }

@@ -1,5 +1,7 @@
 using System.Text;
 using CsStratware.Core.Models;
+using CsStratware.Infrastructure.Logging;
+using CsStratware.Infrastructure.Operations;
 using CsStratware.ModLoader;
 using CsStratware.Pak;
 
@@ -12,7 +14,7 @@ internal static class PakCommands
         Console.WriteLine("""
             pak commands:
               csmanager pak list <file.pak>
-              csmanager pak find <paks-dir|@icarus> <needle> [--path-only] [--grep] [--extracted dir]
+              csmanager pak find <paks-dir|@icarus> <needle> [--path-only] [--grep] [--extracted dir] [--aes-key hex]
               csmanager pak build <content-dir> -o <out.pak> [--mount ../../../Game/]
               csmanager pak build-mod <mod-dir> [-o <out.pak>] [--mount ...] [--prepare] [--ue-pack]
               csmanager pak patch <base.pak> <overlay-dir> -o <out.pak>
@@ -89,7 +91,7 @@ internal static class PakCommands
         if (args.Length < 2)
             return Missing("list <file.pak>");
 
-        var archive = PakArchiveReader.Open(args[1]);
+        var archive = PakArchiveCache.Open(args[1], ResolvePakOpenOptions(args));
         Console.WriteLine($"{archive.FilePath}");
         Console.WriteLine($"mount: {archive.MountPoint}");
         Console.WriteLine($"version: {archive.Footer.Version}");
@@ -179,6 +181,7 @@ internal static class PakCommands
                 sourcePak = cfg.ResolveIcarusDataPak();
 
             var toolchain = cfg.ResolveUnrealPakToolchain();
+            var opCtx = CreateOperationContext(args);
             var prepared = ModAssetPreparer.Prepare(package, new ModPrepareOptions
             {
                 SourcePakPath = sourcePak,
@@ -186,6 +189,8 @@ internal static class PakCommands
                 UnrealPakExecutable = toolchain.Executable,
                 CompiledAssemblyPath = compiledAssembly,
                 ForceExtract = HasFlag(args, "--force-extract"),
+                Operation = opCtx,
+                SkipIfUpToDate = !HasFlag(args, "--force-extract"),
             });
             contentRoot = prepared.PreparedContentDir;
             foreach (var file in prepared.PreparedFiles)
@@ -246,7 +251,7 @@ internal static class PakCommands
         if (args.Length < 3)
             return Missing("extract <file.pak> <out-dir>");
 
-        var archive = PakArchiveReader.Open(args[1]);
+        var archive = PakArchiveCache.Open(args[1], ResolvePakOpenOptions(args));
         PakEntryExtractor.ExtractToDirectory(archive, args[2]);
         Console.WriteLine($"Extracted {archive.Entries.Count} entries to {args[2]}");
         return 0;
@@ -276,7 +281,7 @@ internal static class PakCommands
 
         var matches = Directory.Exists(target)
             ? PakArchiveSearch.SearchDirectory(target, options)
-            : PakArchiveSearch.SearchFile(PakArchiveReader.Open(target), options);
+            : PakArchiveSearch.SearchFile(PakArchiveCache.Open(target, ResolvePakOpenOptions(args)), options);
 
         foreach (var match in matches)
             Console.WriteLine($"{match.PakPath} :: {match.Entry.Path} ({match.Entry.UncompressedSize} bytes)");
@@ -294,7 +299,7 @@ internal static class PakCommands
         var entryPath = args[2];
         var output = GetArg(args, "-o") ?? GetArg(args, "--output");
 
-        var archive = PakArchiveReader.Open(pakPath);
+        var archive = PakArchiveCache.Open(pakPath, ResolvePakOpenOptions(args));
         if (!archive.Entries.TryGetValue(entryPath, out var entry))
         {
             var alt = archive.Entries.Keys.FirstOrDefault(k =>
@@ -347,6 +352,7 @@ internal static class PakCommands
             PathOnly = HasFlag(args, "--path-only"),
             GrepContent = HasFlag(args, "--grep"),
             ExtractedDir = extracted,
+            PakOpenOptions = ResolvePakOpenOptions(args),
         });
 
         foreach (var hit in hits)
@@ -418,7 +424,7 @@ internal static class PakCommands
 
         var matches = Directory.Exists(target)
             ? PakContentSearch.GrepDirectory(target, needle, max)
-            : PakContentSearch.GrepFile(PakArchiveReader.Open(target), needle, max);
+            : PakContentSearch.GrepFile(PakArchiveCache.Open(target, ResolvePakOpenOptions(args)), needle, max);
 
         foreach (var match in matches)
             Console.WriteLine($"{match.PakPath} :: {match.EntryPath} @0x{match.Offset:X} ({match.UncompressedSize} bytes)");
@@ -447,4 +453,28 @@ internal static class PakCommands
 
     private static bool HasFlag(string[] args, string flag) =>
         args.Any(a => string.Equals(a, flag, StringComparison.OrdinalIgnoreCase));
+
+    private static PakOpenOptions? ResolvePakOpenOptions(string[] args)
+    {
+        var key = GetArg(args, "--aes-key")
+            ?? Environment.GetEnvironmentVariable("PAK_AES_KEY");
+        var bytes = PakOpenOptions.ParseAesKey(key);
+        return bytes is null ? null : new PakOpenOptions { AesKey = bytes };
+    }
+
+    private static OperationContext CreateOperationContext(string[] args)
+    {
+        if (HasFlag(args, "--verbose") || HasFlag(args, "-v"))
+            StratwareLog.MinimumLevel = LogLevel.Debug;
+
+        var progress = HasFlag(args, "--progress")
+            ? new Progress<OperationProgress>(p =>
+            {
+                var total = p.Total is int t ? $"/{t}" : "";
+                Console.Error.WriteLine($"[{p.Current}{total}] {p.Message}");
+            })
+            : null;
+
+        return new OperationContext { Progress = progress };
+    }
 }

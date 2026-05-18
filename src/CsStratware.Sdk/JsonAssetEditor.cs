@@ -23,13 +23,48 @@ public sealed class JsonAssetEditor
     public void Remove(string jsonPointer) => RemoveAtPointer(_root, jsonPointer);
 
     /// <summary>Replace property named <paramref name="propertyName"/> on every object in the tree.</summary>
-    public void ReplaceAll(string propertyName, object? value)
+    public void ReplaceAll(string propertyName, object? value) =>
+        ReplaceAll(propertyName, value, underPointer: null);
+
+    /// <summary>Replace property only within subtree at <paramref name="underPointer"/> (JSON pointer).</summary>
+    public void ReplaceAll(string propertyName, object? value, string? underPointer)
     {
-        Walk(_root, node =>
+        if (string.IsNullOrWhiteSpace(underPointer))
+        {
+            Walk(_root, node =>
+            {
+                if (node is JsonObject obj && obj.ContainsKey(propertyName))
+                    obj[propertyName] = JsonValue.Create(value);
+            });
+            return;
+        }
+
+        var subtree = ResolveSubtree(_root, underPointer)
+            ?? throw new InvalidOperationException($"Subtree not found: {underPointer}");
+
+        Walk(subtree, node =>
         {
             if (node is JsonObject obj && obj.ContainsKey(propertyName))
                 obj[propertyName] = JsonValue.Create(value);
         });
+    }
+
+    private static JsonNode? ResolveSubtree(JsonNode root, string pointer)
+    {
+        if (!pointer.StartsWith('/'))
+            throw new FormatException($"JSON pointer must start with '/': {pointer}");
+
+        var segments = pointer.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .Select(Unescape)
+            .ToList();
+        var current = root;
+        foreach (var segment in segments)
+        {
+            current = Navigate(current, segment)
+                ?? throw new InvalidOperationException($"Missing segment '{segment}' in {pointer}");
+        }
+
+        return current;
     }
 
     public string ToJson() => _root.ToJsonString(StratwareJson.Options);

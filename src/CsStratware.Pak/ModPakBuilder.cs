@@ -1,4 +1,6 @@
 using CsStratware.Core.Models;
+using CsStratware.Infrastructure.IO;
+using CsStratware.Infrastructure.Logging;
 
 namespace CsStratware.Pak;
 
@@ -32,34 +34,37 @@ public static class ModPakBuilder
         if (roots.Count == 1)
             return PakBuilder.BuildFromDirectory(roots[0], outputPakPath, options);
 
-        var tempDir = Path.Combine(Path.GetTempPath(), "csstratware-mod-" + Guid.NewGuid().ToString("N"));
+        var tempDir = Path.Combine(mod.RootPath, ".cache", "merged-content");
+        if (Directory.Exists(tempDir))
+        {
+            try { Directory.Delete(tempDir, recursive: true); } catch { /* ignore */ }
+        }
+
         Directory.CreateDirectory(tempDir);
 
         try
         {
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var root in roots)
             {
                 foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
                 {
-                    var relative = Path.GetRelativePath(root, file);
-                    var target = Path.Combine(tempDir, relative);
+                    var relative = Path.GetRelativePath(root, file).Replace('\\', '/');
+                    if (!seen.Add(relative))
+                        continue;
+
+                    var target = Path.Combine(tempDir, relative.Replace('/', Path.DirectorySeparatorChar));
                     Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                    File.Copy(file, target, overwrite: true);
+                    StreamingFileOps.TryLinkOrCopy(file, target);
                 }
             }
 
+            StratwareLog.Info("merged mod content roots", new { roots = roots.Count, tempDir });
             return PakBuilder.BuildFromDirectory(tempDir, outputPakPath, options);
         }
         finally
         {
-            try
-            {
-                Directory.Delete(tempDir, recursive: true);
-            }
-            catch
-            {
-                // Best-effort temp cleanup.
-            }
+            try { Directory.Delete(tempDir, recursive: true); } catch { /* best effort */ }
         }
     }
 }

@@ -5,12 +5,12 @@ namespace CsStratware.Pak;
 
 public static class PakArchiveReader
 {
-    public static PakArchive Open(string pakPath)
+    public static PakArchive Open(string pakPath, PakOpenOptions? options = null)
     {
         var stream = File.OpenRead(pakPath);
         try
         {
-            return Open(stream, pakPath);
+            return Open(stream, pakPath, options);
         }
         catch
         {
@@ -19,17 +19,25 @@ public static class PakArchiveReader
         }
     }
 
-    public static PakArchive Open(Stream stream, string? displayPath = null)
+    public static PakArchive Open(Stream stream, string? displayPath = null, PakOpenOptions? options = null)
     {
         var footer = PakFooterReader.Read(stream);
-        if (footer.EncryptedIndex)
-            throw new NotSupportedException("Encrypted pak index not supported. Provide AES key support or use unencrypted paks.");
-
         stream.Seek(footer.IndexOffset, SeekOrigin.Begin);
         var indexBytes = new byte[footer.IndexSize];
         var read = stream.Read(indexBytes, 0, indexBytes.Length);
         if (read != indexBytes.Length)
             throw new EndOfStreamException("Unexpected end of pak index.");
+
+        if (footer.EncryptedIndex)
+        {
+            if (options?.AesKey is null)
+            {
+                throw new NotSupportedException(
+                    "Encrypted pak index. Pass AES key via PAK_AES_KEY env, --aes-key, or PakOpenOptions.AesKey.");
+            }
+
+            indexBytes = PakAesHelper.DecryptIndex(indexBytes, options.AesKey);
+        }
 
         Dictionary<string, PakEntryRecord> entries;
         string mountPoint;

@@ -1,4 +1,6 @@
+using System.Buffers;
 using System.Text;
+using CsStratware.Infrastructure.Caching;
 using CsStratware.Pak.Models;
 
 namespace CsStratware.Pak;
@@ -23,14 +25,17 @@ public sealed class PakFindHit
 public sealed class PakFindOptions
 {
     public int MaxResults { get; init; } = 30;
+    /// <summary>When true, skip content grep. Use with --grep for path + content.</summary>
     public bool PathOnly { get; init; }
     public bool GrepContent { get; init; }
     public string? ExtractedDir { get; init; }
     public IReadOnlyList<string> Extensions { get; init; } =
         [".json", ".uasset", ".uexp", ".ini"];
     public long MaxGrepEntryBytes { get; init; } = 16 * 1024 * 1024;
+    public PakOpenOptions? PakOpenOptions { get; init; }
 }
 
+/// <summary>Search pak paths, optional content grep, and indexed extracted trees.</summary>
 public static class PakFind
 {
     public static IReadOnlyList<PakFindHit> Find(
@@ -44,9 +49,7 @@ public static class PakFind
         if (Directory.Exists(target))
             FindInPakDirectory(target, needle, options, hits);
         else if (File.Exists(target) && target.EndsWith(".pak", StringComparison.OrdinalIgnoreCase))
-            FindInArchive(PakArchiveReader.Open(target), needle, options, hits);
-        else if (Directory.Exists(options.ExtractedDir))
-            FindOnDisk(options.ExtractedDir, needle, options, hits);
+            FindInArchive(PakArchiveCache.Open(target, options.PakOpenOptions), needle, options, hits);
 
         if (hits.Count < options.MaxResults
             && !string.IsNullOrWhiteSpace(options.ExtractedDir)
@@ -66,7 +69,7 @@ public static class PakFind
     {
         foreach (var pakPath in EnumerateSearchPaks(pakDirectory))
         {
-            var archive = PakArchiveReader.Open(pakPath);
+            var archive = PakArchiveCache.Open(pakPath, options.PakOpenOptions);
             FindInArchive(archive, needle, options, hits);
             if (hits.Count >= options.MaxResults)
                 return;
@@ -110,7 +113,8 @@ public static class PakFind
             });
         }
 
-        if (options.PathOnly || !options.GrepContent || hits.Count >= options.MaxResults)
+        var wantContent = options.GrepContent && !options.PathOnly;
+        if (!wantContent || hits.Count >= options.MaxResults)
             return;
 
         if (pathMatches.Count == 0)
@@ -143,6 +147,17 @@ public static class PakFind
         PakFindOptions options,
         List<PakFindHit> hits)
     {
+        var index = AssetIndexCache.ForDirectory(directory);
+        index.GetOrBuild();
+
+        var indexed = index.FindByFileName(needle);
+        if (indexed is not null && File.Exists(indexed))
+        {
+            hits.Add(new PakFindHit { Kind = PakFindHitKind.Disk, FilePath = indexed });
+            if (hits.Count >= options.MaxResults)
+                return;
+        }
+
         var exts = options.Extensions
             .Select(e => e.StartsWith('.') ? e : "." + e)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -154,7 +169,7 @@ public static class PakFind
                 continue;
 
             if (!Path.GetFileName(file).Contains(needle, StringComparison.OrdinalIgnoreCase)
-                && !ContainsNeedle(file, needle))
+                && !ContainsNeedleStreaming(file, needle))
                 continue;
 
             hits.Add(new PakFindHit
@@ -168,12 +183,38 @@ public static class PakFind
         }
     }
 
-    private static bool ContainsNeedle(string filePath, string needle)
+    private static bool ContainsNeedleStreaming(string filePath, string needle)
     {
-        using var stream = File.OpenRead(filePath);
-        var buf = new byte[Math.Min(512 * 1024, stream.Length)];
-        var read = stream.Read(buf, 0, buf.Length);
-        var text = Encoding.UTF8.GetString(buf, 0, read);
-        return text.Contains(needle, StringComparison.OrdinalIgnoreCase);
+        var utf8 = Encoding.UTF8.GetBytes(needle);
+        var buf = ArrayPool<byte>.Shared.Rent(512 * 1024 + utf8.Length);
+        try
+        {
+            using var stream = File.OpenRead(filePath);
+            var carry = 0;
+            int read;
+            while ((read = stream.Read(buf, carry, buf.Length - carry)) > 0)
+            {
+                var window = buf.AsSpan(0, carry + read);
+                if (BinarySpanSearch.Contains(window, utf8))
+                    return true;
+
+                var overlap = utf8.Length - 1;
+                if (overlap > 0 && window.Length > overlap)
+                {
+                    window.Slice(window.Length - overlap).CopyTo(buf);
+                    carry = overlap;
+                }
+                else
+                {
+                    carry = 0;
+                }
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buf);
+        }
+
+        return false;
     }
 }

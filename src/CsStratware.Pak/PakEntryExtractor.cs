@@ -29,11 +29,17 @@ public static class PakEntryExtractor
             ? footer.CompressionMethods[(int)entry.CompressionMethodIndex]
             : string.Empty;
 
+        if (methodName.Contains("Oodle", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new NotSupportedException(
+                $"Oodle compression on '{entry.Path}'. Use 'pak ue extract' or FModel export.");
+        }
+
         if (!methodName.Contains("Zlib", StringComparison.OrdinalIgnoreCase)
             && entry.CompressionMethodIndex != 1)
         {
             throw new NotSupportedException(
-                $"Compression method '{methodName}' (index {entry.CompressionMethodIndex}) not supported for {entry.Path}.");
+                $"Compression method '{methodName}' (index {entry.CompressionMethodIndex}) not supported for {entry.Path}. Use UnrealPak extract.");
         }
 
         var output = new byte[entry.UncompressedSize];

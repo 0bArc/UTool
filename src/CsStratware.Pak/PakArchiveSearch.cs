@@ -55,7 +55,7 @@ public static class PakArchiveSearch
 
         foreach (var pakPath in Directory.EnumerateFiles(pakDirectory, searchPattern))
         {
-            var archive = PakArchiveReader.Open(pakPath);
+            var archive = PakArchiveCache.Open(pakPath);
             var remaining = options.MaxResults - results.Count;
             foreach (var match in SearchFile(archive, new PakSearchOptions
             {

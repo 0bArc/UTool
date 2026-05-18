@@ -11,7 +11,7 @@ public static class PakPatcher
         string outputPakPath,
         PakBuildOptions? options = null)
     {
-        var archive = PakArchiveReader.Open(basePakPath);
+        var archive = PakArchiveCache.Open(basePakPath);
         using var baseStream = File.OpenRead(basePakPath);
         var tempDir = Path.Combine(Path.GetTempPath(), "csstratware-pak-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);

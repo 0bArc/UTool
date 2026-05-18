@@ -5,6 +5,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\CsStratware.Core\CsStratware.Core.csproj" />
+    <ProjectReference Include="..\CsStratware.Infrastructure\CsStratware.Infrastructure.csproj" />
     <ProjectReference Include="..\CsStratware.ModLoader\CsStratware.ModLoader.csproj" />
   </ItemGroup>
 </Project>
