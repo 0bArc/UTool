@@ -1,5 +1,6 @@
 using CsStratware.Core.Models;
 using CsStratware.Infrastructure.Build;
+using CsStratware.Infrastructure.PlayerData;
 using CsStratware.Infrastructure.Caching;
 using CsStratware.Infrastructure.IO;
 using CsStratware.Infrastructure.Logging;
@@ -17,6 +18,7 @@ public sealed class ModPrepareOptions
     public string? UnrealPakExecutable { get; init; }
     public bool ForceExtract { get; init; }
     public string? CompiledAssemblyPath { get; init; }
+    public string? PlayerDataRoot { get; init; }
     public OperationContext? Operation { get; init; }
     public bool SkipIfUpToDate { get; init; } = true;
 }
@@ -41,16 +43,26 @@ public static class ModAssetPreparer
 
         using var _ = StratwareLog.Timed($"prepare {mod.Manifest.Id}");
 
-        var codePatches = LoadCodePatches(mod, options);
+        var saves = PlayerSaveReader.TryLoad(options.PlayerDataRoot);
+        var codePatches = LoadCodePatches(mod, options, saves);
         var jsonPatchesByAsset = LoadJsonPatches(mod);
 
-        var assetPaths = jsonPatchesByAsset.Keys
+        var candidatePaths = jsonPatchesByAsset.Keys
             .Concat(codePatches.Select(p => p.AssetFileName))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+        var assetPaths = candidatePaths
+            .Where(path => AssetShouldPrepare(path, jsonPatchesByAsset, codePatches, saves))
+            .ToList();
+
         if (assetPaths.Count == 0)
-            throw new InvalidOperationException($"No assets to prepare for mod '{mod.Manifest.Id}'.");
+        {
+            var reason = codePatches.Count > 0 && saves is not null
+                ? "conditional asset patch did not apply (check PlayerData / boss completion)"
+                : "add [PatchAsset] code patches or patchFiles";
+            throw new InvalidOperationException($"No assets to prepare for mod '{mod.Manifest.Id}': {reason}.");
+        }
 
         var inputHashes = BuildInputHashes(mod, options, jsonPatchesByAsset);
         var expectedOutputs = assetPaths
@@ -85,6 +97,7 @@ public static class ModAssetPreparer
                 options,
                 jsonPatchesByAsset,
                 codePatches,
+                saves,
                 extractionPipeline),
             op);
 
@@ -104,8 +117,13 @@ public static class ModAssetPreparer
         ModPrepareOptions options,
         Dictionary<string, List<PatchOperation>> jsonPatchesByAsset,
         IReadOnlyList<CodeAssetPatch> codePatches,
+        PlayerSaveReader? saves,
         UnrealPakExtractionPipeline extractionPipeline)
     {
+        var patchers = ModCodePatchRunner.FilterActivePatches(
+            codePatches.Where(p => string.Equals(p.AssetFileName, assetPath, StringComparison.OrdinalIgnoreCase)),
+            saves);
+
         var sourceJson = LoadSourceJson(mod, assetPath, options, extractionPipeline);
         var issues = JsonSchemaValidator.ValidateUeExport(sourceJson);
         foreach (var issue in issues)
@@ -116,13 +134,8 @@ public static class ModAssetPreparer
         if (jsonPatchesByAsset.TryGetValue(assetPath, out var jsonOps))
             current = JsonAssetPatcher.Apply(current, jsonOps);
 
-        var patchers = codePatches
-            .Where(p => string.Equals(p.AssetFileName, assetPath, StringComparison.OrdinalIgnoreCase))
-            .Select(p => p.Instance)
-            .ToList();
-
         if (patchers.Count > 0)
-            current = ModCodePatchRunner.ApplyAll(current, patchers);
+            current = ModCodePatchRunner.ApplyAll(current, patchers, saves);
 
         var stageName = Path.GetFileName(assetPath);
         var target = Path.Combine(preparedRoot, stageName);
@@ -154,12 +167,30 @@ public static class ModAssetPreparer
             hashes[options.SourcePakPath] = FileIdentity.FromPath(options.SourcePakPath).CacheKey;
 
         foreach (var kv in jsonPatches)
-            hashes[$"ops:{kv.Key}"] = ContentHasher.HashText(string.Join('|', kv.Value.Select(o => $"{o.Op}:{o.Path}")));
+            hashes[$"ops:{kv.Key}"] = ContentHasher.HashText(string.Join('|', kv.Value.Select(o =>
+                $"{o.Op}:{o.Path}:{o.MatchProperty}:{o.MatchValue}:{o.TargetPath}")));
 
         return hashes;
     }
 
-    private static IReadOnlyList<CodeAssetPatch> LoadCodePatches(ModPackage mod, ModPrepareOptions options)
+    private static bool AssetShouldPrepare(
+        string assetPath,
+        Dictionary<string, List<PatchOperation>> jsonPatchesByAsset,
+        IReadOnlyList<CodeAssetPatch> codePatches,
+        PlayerSaveReader? saves)
+    {
+        if (jsonPatchesByAsset.ContainsKey(assetPath))
+            return true;
+
+        var forAsset = codePatches
+            .Where(p => string.Equals(p.AssetFileName, assetPath, StringComparison.OrdinalIgnoreCase));
+        return ModCodePatchRunner.FilterActivePatches(forAsset, saves).Count > 0;
+    }
+
+    private static IReadOnlyList<CodeAssetPatch> LoadCodePatches(
+        ModPackage mod,
+        ModPrepareOptions options,
+        PlayerSaveReader? saves)
     {
         var assembly = options.CompiledAssemblyPath;
         if (string.IsNullOrWhiteSpace(assembly))
@@ -170,7 +201,14 @@ public static class ModAssetPreparer
             assembly = ModCodeCompiler.Compile(mod).AssemblyPath;
         }
 
-        return ModCodePatchRunner.LoadFromAssembly(assembly, mod.Manifest.Id);
+        var bundle = ModCodePatchRunner.LoadFromAssembly(assembly, mod.Manifest.Id);
+        if (bundle.AssetPatches.Count == 0 && bundle.PlayerDataPatches.Count > 0)
+            StratwareLog.Info("prepare: no asset patches (playerdata-only mod)", new { mod = mod.Manifest.Id });
+
+        if (bundle.AssetPatches.Count == 0 && mod.Manifest.PatchFiles.Count == 0)
+            return [];
+
+        return bundle.AssetPatches;
     }
 
     private static Dictionary<string, List<PatchOperation>> LoadJsonPatches(ModPackage mod)

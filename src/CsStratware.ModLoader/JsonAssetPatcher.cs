@@ -24,6 +24,29 @@ public static class JsonAssetPatcher
                 case "replaceall":
                     editor.ReplaceAll(PropertyNameFromPath(op.Path), op.Value);
                     break;
+                case "removewhere":
+                    RequireMatch(op);
+                    editor.RemoveArrayElementsWhere(op.Path, op.MatchProperty!, op.MatchValue);
+                    break;
+                case "setwhere":
+                    RequireMatch(op);
+                    RequireTarget(op);
+                    editor.SetOnArrayElementsWhere(
+                        op.Path,
+                        op.MatchProperty!,
+                        op.MatchValue,
+                        op.TargetPath!,
+                        op.Value);
+                    break;
+                case "removepropertywhere":
+                    RequireMatch(op);
+                    RequireTarget(op);
+                    editor.RemovePropertyOnArrayElementsWhere(
+                        op.Path,
+                        op.MatchProperty!,
+                        op.MatchValue,
+                        op.TargetPath!);
+                    break;
                 default:
                     throw new NotSupportedException($"Unknown patch op: {op.Op}");
             }
@@ -36,5 +59,17 @@ public static class JsonAssetPatcher
     {
         var trimmed = path.Trim('/');
         return trimmed.Split('/').LastOrDefault() ?? trimmed;
+    }
+
+    private static void RequireMatch(PatchOperation op)
+    {
+        if (string.IsNullOrWhiteSpace(op.MatchProperty))
+            throw new InvalidOperationException($"Patch op '{op.Op}' requires matchProperty.");
+    }
+
+    private static void RequireTarget(PatchOperation op)
+    {
+        if (string.IsNullOrWhiteSpace(op.TargetPath))
+            throw new InvalidOperationException($"Patch op '{op.Op}' requires targetPath.");
     }
 }

@@ -10,6 +10,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\CsStratware.Infrastructure\CsStratware.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\CsStratware.ModLoader\CsStratware.ModLoader.csproj" />
     <ProjectReference Include="..\..\src\CsStratware.Pak\CsStratware.Pak.csproj" />
     <ProjectReference Include="..\..\src\CsStratware.Sdk\CsStratware.Sdk.csproj" />
   </ItemGroup>

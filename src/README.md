@@ -8,7 +8,7 @@
 |---------|------|
 | **CsStratware.Core** | Models, JSON helpers |
 | **CsStratware.Infrastructure** | Caching, incremental builds, logging, parallel pipelines, mod sandbox hooks |
-| **CsStratware.Sdk** | Mod author API — `AssetPatch`, `JsonAssetEditor`, `[PatchAsset]` |
+| **CsStratware.Sdk** | Mod author API — `AssetPatch`, `ConditionalAssetPatch`, `PlayerDataPatch`, `JsonAssetEditor` |
 | **CsStratware.ModLoader** | `mod.json` discovery, JSON patches, compile & run C# patches |
 | **CsStratware.Pak** | Pak index/search, UnrealPak wrap, `build-mod` prepare stage |
 | **CsStratware.Cli** | **`csmanager`** executable (`list`, `validate`, `compile`, `pak`) |
@@ -89,7 +89,42 @@ csmanager compile <mod-dir> --prepare    # + .cache/prepared/*.json
 csmanager pak build-mod <mod-dir>        # compile + prepare + pack
 ```
 
-Declarative patches: `patchFiles` → `patches/*.json` (same ops as `JsonAssetEditor`). Code + JSON patches merge per asset file name.
+Optional declarative patches: `patchFiles` → `patches/*.json`. Prefer code-only `[PatchAsset]` / `[PatchPlayerData]`.
+
+### PlayerData (local UE4 saves)
+
+Default root: `%LocalAppData%/<GameId>/Saved/PlayerData` (Icarus → `...\Icarus\Saved\PlayerData`). Override in `csstratware.json`:
+
+```json
+{ "icarusPlayerDataDir": "C:\\Users\\you\\AppData\\Local\\Icarus\\Saved\\PlayerData" }
+```
+
+Or env `CSSTRATWARE_PLAYER_DATA`.
+
+```csharp
+[PatchAsset("D_AICreatureType.json")]
+public sealed class MyPatch : ConditionalAssetPatch
+{
+    public override bool ShouldApply(IPlayerSaveContext saves) =>
+        saves.AnyProfileHasCompletedAccolade("DefeatQuarrite");
+
+    public override void Apply(JsonAssetEditor editor) { /* pak JSON */ }
+}
+
+[PatchPlayerData("BestiaryData.json")]
+public sealed class SavePatch : PlayerDataPatch
+{
+    public override void Apply(JsonAssetEditor editor, PlayerDataApplyContext ctx) { /* per-profile save */ }
+}
+```
+
+```text
+csmanager playerdata list
+csmanager playerdata status <mod-dir>     # gate / skip asset patches
+csmanager playerdata apply <mod-dir>      # write [PatchPlayerData] to saves
+```
+
+`compile --prepare` / `pak build-mod` read PlayerData for `ConditionalAssetPatch`; if gate fails, asset not staged (no pak change).
 
 ## Integration test (demo repo)
 

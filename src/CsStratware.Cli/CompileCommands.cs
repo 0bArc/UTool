@@ -42,25 +42,26 @@ internal static class CompileCommands
             var result = ModCodeCompiler.Compile(package, configuration);
             Console.WriteLine($"compiled: {result.AssemblyPath}");
 
-            var patches = ModCodePatchRunner.LoadFromAssembly(result.AssemblyPath);
-            foreach (var patch in patches)
-                Console.WriteLine($"  patch: {patch.AssetFileName} ({patch.PatchType.Name})");
+            var bundle = ModCodePatchRunner.LoadFromAssembly(result.AssemblyPath);
+            foreach (var patch in bundle.AssetPatches)
+                Console.WriteLine($"  asset: {patch.AssetFileName} ({patch.PatchType.Name})");
+            foreach (var patch in bundle.PlayerDataPatches)
+                Console.WriteLine($"  playerdata: {patch.RelativePath} ({patch.PatchType.Name})");
 
             if (!HasFlag(args, "--prepare"))
                 return 0;
 
             var cfg = StratwareConfig.Load(modDir);
-            var sourcePak = package.Manifest.Pak?.SourcePak;
-            if (sourcePak == "@icarus-data")
-                sourcePak = cfg.ResolveIcarusDataPak();
+            var sourcePak = cfg.ResolveSourcePak(package.Manifest.Pak?.SourcePak, package.Manifest.Target?.GameId);
 
             var toolchain = cfg.ResolveUnrealPakToolchain();
             var prepared = ModAssetPreparer.Prepare(package, new ModPrepareOptions
             {
                 SourcePakPath = sourcePak,
-                ExtractedDir = cfg.ResolveDemoExtractedDir(),
+                ExtractedDir = cfg.ResolveExtractedDir(),
                 UnrealPakExecutable = toolchain.Executable,
                 CompiledAssemblyPath = result.AssemblyPath,
+                PlayerDataRoot = cfg.ResolvePlayerDataDir(package.Manifest.Target?.GameId),
                 ForceExtract = HasFlag(args, "--force-extract"),
             });
 

@@ -11,6 +11,7 @@ static void PrintUsage()
           csmanager list <mods-dir>              List discovered mods
           csmanager validate <mods-dir>          Validate mod manifests and layout
           csmanager compile <mod-dir> [--prepare]  Build mod C# patches (compile help)
+          csmanager playerdata <subcommand>        Local UE4 saves (playerdata help)
           csmanager pak <subcommand> [args...]   UE4 .pak tools (pak help)
           csmanager setup <subcommand>           Install tools (setup help)
           csmanager help                         Show this help
@@ -30,6 +31,9 @@ if (command == "pak")
 
 if (command == "compile")
     return CompileCommands.Run(args[1..]);
+
+if (command == "playerdata")
+    return PlayerDataCommands.Run(args[1..]);
 
 if (command == "setup")
     return SetupCommands.Run(args[1..]);

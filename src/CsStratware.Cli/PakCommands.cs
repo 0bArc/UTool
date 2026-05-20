@@ -14,7 +14,7 @@ internal static class PakCommands
         Console.WriteLine("""
             pak commands:
               csmanager pak list <file.pak>
-              csmanager pak find <paks-dir|@icarus> <needle> [--path-only] [--grep] [--extracted dir] [--aes-key hex]
+              csmanager pak find <paks-dir|@paks> <needle> [--game <gameId>] [--path-only] [--grep] [--extracted dir] [--aes-key hex]
               csmanager pak build <content-dir> -o <out.pak> [--mount ../../../Game/]
               csmanager pak build-mod <mod-dir> [-o <out.pak>] [--mount ...] [--prepare] [--ue-pack]
               csmanager pak patch <base.pak> <overlay-dir> -o <out.pak>
@@ -23,7 +23,7 @@ internal static class PakCommands
               csmanager pak cat <file.pak> <entry-path> [-o out.json]
               csmanager pak grep <file-or-dir> <needle> [--max N]
               csmanager pak ue extract <pak> <out-dir> [--filter *Recipe*]
-              csmanager pak ue pack <content-dir> -o <out.pak> [--mount ../../../Icarus/] [-compress]
+              csmanager pak ue pack <content-dir> -o <out.pak> [--mount <ue-mount>] [--game <gameId>] [-compress]
             """);
     }
 
@@ -151,14 +151,19 @@ internal static class PakCommands
         if (!Path.IsPathRooted(output))
             output = Path.Combine(modDir, output);
 
+        var gameId = package.Manifest.Target?.GameId;
         var mount = GetArg(args, "--mount")
             ?? package.Manifest.Pak?.MountPoint
-            ?? "../../../Icarus/Content/data/Crafting/";
+            ?? cfg.ResolveMountPoint(gameId);
+        if (string.IsNullOrWhiteSpace(mount))
+        {
+            Console.Error.WriteLine("Mount point required: mod.json pak.mountPoint, --mount, or defaultMountPoint in csstratware.json.");
+            return 1;
+        }
 
         var useUePack = HasFlag(args, "--ue-pack")
             || package.Manifest.Pak?.UseUnrealPak == true
-            || !string.IsNullOrWhiteSpace(package.Manifest.Pak?.SourcePak)
-            || string.Equals(package.Manifest.Target?.GameId, "Icarus", StringComparison.OrdinalIgnoreCase);
+            || !string.IsNullOrWhiteSpace(package.Manifest.Pak?.SourcePak);
 
         var hasCode = ModCodeCompiler.HasCodeProject(package);
         var shouldPrepare = HasFlag(args, "--prepare")
@@ -176,18 +181,17 @@ internal static class PakCommands
                 Console.WriteLine($"compiled: {compiledAssembly}");
             }
 
-            var sourcePak = package.Manifest.Pak?.SourcePak;
-            if (sourcePak == "@icarus-data")
-                sourcePak = cfg.ResolveIcarusDataPak();
+            var sourcePak = cfg.ResolveSourcePak(package.Manifest.Pak?.SourcePak, gameId);
 
             var toolchain = cfg.ResolveUnrealPakToolchain();
             var opCtx = CreateOperationContext(args);
             var prepared = ModAssetPreparer.Prepare(package, new ModPrepareOptions
             {
                 SourcePakPath = sourcePak,
-                ExtractedDir = cfg.ResolveDemoExtractedDir(),
+                ExtractedDir = cfg.ResolveExtractedDir(),
                 UnrealPakExecutable = toolchain.Executable,
                 CompiledAssemblyPath = compiledAssembly,
+                PlayerDataRoot = cfg.ResolvePlayerDataDir(package.Manifest.Target?.GameId),
                 ForceExtract = HasFlag(args, "--force-extract"),
                 Operation = opCtx,
                 SkipIfUpToDate = !HasFlag(args, "--force-extract"),
@@ -337,15 +341,25 @@ internal static class PakCommands
 
         var cfg = StratwareConfig.Load();
         var target = args[1];
-        if (target == "@icarus" && !string.IsNullOrWhiteSpace(cfg.IcarusPaksDir))
-            target = cfg.IcarusPaksDir;
+        var gameId = GetArg(args, "--game");
+        if (StratwareConfig.IsPaksDirAlias(target))
+        {
+            var paks = cfg.ResolvePaksDir(gameId);
+            if (string.IsNullOrWhiteSpace(paks))
+            {
+                Console.Error.WriteLine("gamePaksDir not set in csstratware.json (or games.<gameId>.paksDir).");
+                return 1;
+            }
+
+            target = paks;
+        }
 
         var needle = args[2];
         var max = 30;
         if (int.TryParse(GetArg(args, "--max"), out var parsedMax) && parsedMax > 0)
             max = parsedMax;
 
-        var extracted = GetArg(args, "--extracted") ?? cfg.DemoExtractedDir;
+        var extracted = GetArg(args, "--extracted") ?? cfg.ResolveExtractedDir();
         var hits = PakFind.Find(target, needle, new PakFindOptions
         {
             MaxResults = max,
@@ -396,7 +410,7 @@ internal static class PakCommands
     private static int UePack(string[] args)
     {
         if (args.Length < 2)
-            return Missing("ue pack <content-dir> -o <out.pak> [--mount ../../../Icarus/]");
+            return Missing("ue pack <content-dir> -o <out.pak> [--mount <ue-mount>] [--game <gameId>]");
 
         var content = args[0];
         var output = GetArg(args, "-o") ?? GetArg(args, "--output");
@@ -404,7 +418,12 @@ internal static class PakCommands
             return Missing("ue pack <content-dir> -o <out.pak>");
 
         var cfg = StratwareConfig.Load();
-        var mount = GetArg(args, "--mount") ?? cfg.IcarusMountPoint ?? "../../../Icarus/";
+        var mount = GetArg(args, "--mount") ?? cfg.ResolveMountPoint(GetArg(args, "--game"));
+        if (string.IsNullOrWhiteSpace(mount))
+        {
+            Console.Error.WriteLine("Mount point required: --mount or defaultMountPoint in csstratware.json.");
+            return 1;
+        }
         var ue = UnrealPakToolchain.ToOptions(cfg.ResolveUnrealPakToolchain());
         UnrealPakRunner.PackDirectory(content, output, mount, HasFlag(args, "-compress"), ue);
         Console.WriteLine($"UnrealPak pack -> {Path.GetFullPath(output)}");

@@ -1,6 +1,15 @@
 {
-  "icarusPaksDir": "D:\\SteamLibrary\\steamapps\\common\\Icarus\\Icarus\\Content\\Paks",
-  "icarusDataPak": "D:\\SteamLibrary\\steamapps\\common\\Icarus\\Icarus\\Content\\Data\\data.pak",
-  "demoExtractedDir": "extracted",
-  "icarusMountPoint": "../../../Icarus/Content/data/Crafting/"
+  "gamePaksDir": "D:\\Games\\YourGame\\Content\\Paks",
+  "dataPak": "D:\\Games\\YourGame\\Content\\Data\\data.pak",
+  "playerDataDir": "C:\\Users\\you\\AppData\\Local\\YourGame\\Saved\\PlayerData",
+  "extractedDir": "extracted",
+  "defaultMountPoint": "../../../YourGame/Content/data/",
+  "games": {
+    "Icarus": {
+      "paksDir": "D:\\SteamLibrary\\steamapps\\common\\Icarus\\Icarus\\Content\\Paks",
+      "dataPak": "D:\\SteamLibrary\\steamapps\\common\\Icarus\\Icarus\\Content\\Data\\data.pak",
+      "playerDataDir": "C:\\Users\\you\\AppData\\Local\\Icarus\\Saved\\PlayerData",
+      "mountPoint": "../../../Icarus/Content/data/AI/"
+    }
+  }
 }
