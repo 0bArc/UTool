@@ -1,0 +1,20 @@
+{
+  "id": "icaurs.quarrites.gone",
+  "name": "No quarrites",
+  "version": "1.1.0",
+  "description": "Removes quarrites and rock-golem spawn rules after DefeatQuarrite is completed in local saves.",
+  "author": "csStratwareDemo",
+  "target": {
+    "gameId": "Icarus",
+    "engineVersion": "4.27",
+    "minGameVersion": "1.0.0"
+  },
+  "contentRoots": [],
+  "codeProject": "code/removeQuarrites.csproj",
+  "pak": {
+    "output": "dist/removeQuarrites.pak",
+    "mountPoint": "../../../Icarus/Content/data/AI/",
+    "sourcePak": "@data",
+    "useUnrealPak": true
+  }
+}

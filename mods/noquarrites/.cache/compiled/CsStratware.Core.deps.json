@@ -1,0 +1,23 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v8.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v8.0": {
+      "CsStratware.Core/0.1.0": {
+        "runtime": {
+          "CsStratware.Core.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "CsStratware.Core/0.1.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

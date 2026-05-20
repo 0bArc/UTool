@@ -1,0 +1,39 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v8.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v8.0": {
+      "CsStratware.Sdk/0.1.0": {
+        "dependencies": {
+          "CsStratware.Core": "0.1.0"
+        },
+        "runtime": {
+          "CsStratware.Sdk.dll": {}
+        }
+      },
+      "CsStratware.Core/0.1.0": {
+        "runtime": {
+          "CsStratware.Core.dll": {
+            "assemblyVersion": "0.1.0.0",
+            "fileVersion": "0.1.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "CsStratware.Sdk/0.1.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "CsStratware.Core/0.1.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

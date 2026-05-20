@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "dgSpecHash": "M8go+qa0HyU=",
+  "success": true,
+  "projectFilePath": "F:\\Data\\personal\\c#\\modding\\ICARUS\\noquarrites\\mods\\noquarrites\\code\\removeQuarrites.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\sandk\\.nuget\\packages\\microsoft.netcore.app.ref\\8.0.25\\microsoft.netcore.app.ref.8.0.25.nupkg.sha512",
+    "C:\\Users\\sandk\\.nuget\\packages\\microsoft.windowsdesktop.app.ref\\8.0.25\\microsoft.windowsdesktop.app.ref.8.0.25.nupkg.sha512",
+    "C:\\Users\\sandk\\.nuget\\packages\\microsoft.aspnetcore.app.ref\\8.0.25\\microsoft.aspnetcore.app.ref.8.0.25.nupkg.sha512"
+  ],
+  "logs": []
+}

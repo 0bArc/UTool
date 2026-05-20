@@ -1,0 +1,12 @@
+{
+  "RootDirectory": "F:\\Data\\personal\\c#\\modding\\ICARUS\\noquarrites\\extracted",
+  "RootSha256": "ffffffffffffffff:8deb666335d19a2",
+  "Entries": [
+    {
+      "RelativePath": "AI\\D_AICreatureType.json",
+      "FileName": "D_AICreatureType.json",
+      "Sha256": "b05e4708228bf760781c182c567af15c798bd6580a2773da2202e672e794cc96",
+      "Size": 98114
+    }
+  ]
+}

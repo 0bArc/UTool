@@ -1,0 +1,131 @@
+{
+  "version": 4,
+  "targets": {
+    "net8.0": {
+      "CsStratware.Core/0.1.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v8.0",
+        "compile": {
+          "bin/placeholder/CsStratware.Core.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/CsStratware.Core.dll": {}
+        }
+      },
+      "CsStratware.Sdk/0.1.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v8.0",
+        "dependencies": {
+          "CsStratware.Core": "0.1.0"
+        },
+        "compile": {
+          "bin/placeholder/CsStratware.Sdk.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/CsStratware.Sdk.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "CsStratware.Core/0.1.0": {
+      "type": "project",
+      "path": "../../../../../../csStratware/src/CsStratware.Core/CsStratware.Core.csproj",
+      "msbuildProject": "../../../../../../csStratware/src/CsStratware.Core/CsStratware.Core.csproj"
+    },
+    "CsStratware.Sdk/0.1.0": {
+      "type": "project",
+      "path": "../../../../../../csStratware/src/CsStratware.Sdk/CsStratware.Sdk.csproj",
+      "msbuildProject": "../../../../../../csStratware/src/CsStratware.Sdk/CsStratware.Sdk.csproj"
+    }
+  },
+  "projectFileDependencyGroups": {
+    "net8.0": [
+      "CsStratware.Sdk >= 0.1.0"
+    ]
+  },
+  "packageFolders": {
+    "C:\\Users\\sandk\\.nuget\\packages\\": {}
+  },
+  "project": {
+    "version": "1.0.0",
+    "restore": {
+      "projectUniqueName": "F:\\Data\\personal\\c#\\modding\\ICARUS\\noquarrites\\mods\\noquarrites\\code\\removeQuarrites.csproj",
+      "projectName": "removeQuarrites",
+      "projectPath": "F:\\Data\\personal\\c#\\modding\\ICARUS\\noquarrites\\mods\\noquarrites\\code\\removeQuarrites.csproj",
+      "packagesPath": "C:\\Users\\sandk\\.nuget\\packages\\",
+      "outputPath": "F:\\Data\\personal\\c#\\modding\\ICARUS\\noquarrites\\mods\\noquarrites\\code\\obj\\",
+      "projectStyle": "PackageReference",
+      "configFilePaths": [
+        "C:\\Users\\sandk\\AppData\\Roaming\\NuGet\\NuGet.Config",
+        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+      ],
+      "originalTargetFrameworks": [
+        "net8.0"
+      ],
+      "sources": {
+        "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+        "https://api.nuget.org/v3/index.json": {}
+      },
+      "frameworks": {
+        "net8.0": {
+          "framework": "net8.0",
+          "targetAlias": "net8.0",
+          "projectReferences": {
+            "F:\\Data\\personal\\c#\\csStratware\\src\\CsStratware.Sdk\\CsStratware.Sdk.csproj": {
+              "projectPath": "F:\\Data\\personal\\c#\\csStratware\\src\\CsStratware.Sdk\\CsStratware.Sdk.csproj"
+            }
+          }
+        }
+      },
+      "warningProperties": {
+        "warnAsError": [
+          "NU1605"
+        ]
+      },
+      "restoreAuditProperties": {
+        "enableAudit": "true",
+        "auditLevel": "low",
+        "auditMode": "direct"
+      },
+      "SdkAnalysisLevel": "10.0.300"
+    },
+    "frameworks": {
+      "net8.0": {
+        "framework": "net8.0",
+        "targetAlias": "net8.0",
+        "imports": [
+          "net461",
+          "net462",
+          "net47",
+          "net471",
+          "net472",
+          "net48",
+          "net481"
+        ],
+        "assetTargetFallback": true,
+        "warn": true,
+        "downloadDependencies": [
+          {
+            "name": "Microsoft.AspNetCore.App.Ref",
+            "version": "[8.0.25, 8.0.25]"
+          },
+          {
+            "name": "Microsoft.NETCore.App.Ref",
+            "version": "[8.0.25, 8.0.25]"
+          },
+          {
+            "name": "Microsoft.WindowsDesktop.App.Ref",
+            "version": "[8.0.25, 8.0.25]"
+          }
+        ],
+        "frameworkReferences": {
+          "Microsoft.NETCore.App": {
+            "privateAssets": "all"
+          }
+        },
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.300-preview.0.26177.108/PortableRuntimeIdentifierGraph.json"
+      }
+    }
+  }
+}

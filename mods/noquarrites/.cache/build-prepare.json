@@ -1,0 +1,43 @@
+{
+  "Stage": "prepare",
+  "Inputs": [
+    {
+      "Path": "F:\\Data\\personal\\c#\\modding\\ICARUS\\noquarrites\\mods\\noquarrites\\mod.json",
+      "Sha256": "7660e1ae8421193559d501f982882e03519a4d51c1c9f38afe8e95f7521e7b82"
+    },
+    {
+      "Path": "F:\\Data\\personal\\c#\\modding\\ICARUS\\noquarrites\\mods\\noquarrites\\.cache\\compiled\\removeQuarrites.dll",
+      "Sha256": "ec89d2086968ea690c5a46cd9abddbb334b5a6d5471ba5e599b65e876c4a6c32"
+    },
+    {
+      "Path": "D:\\SteamLibrary\\steamapps\\common\\Icarus\\Icarus\\Content\\Data\\data.pak",
+      "Sha256": "249c5b:8deb2ee27a574c1"
+    }
+  ],
+  "Outputs": [
+    {
+      "Path": "F:\\Data\\personal\\c#\\modding\\ICARUS\\noquarrites\\mods\\noquarrites\\.cache\\prepared\\D_AICreatureType.json",
+      "Sha256": "d0bad8ba4587f35ea2018af93b51fa5e864627391542c1b36c020790dc7e27ec"
+    },
+    {
+      "Path": "F:\\Data\\personal\\c#\\modding\\ICARUS\\noquarrites\\mods\\noquarrites\\.cache\\prepared\\D_AutonomousSpawns.json",
+      "Sha256": "744918929d3ba4e512a6d45bbd62a4aa84d2c604f259254253a58690df1adb2e"
+    },
+    {
+      "Path": "F:\\Data\\personal\\c#\\modding\\ICARUS\\noquarrites\\mods\\noquarrites\\.cache\\prepared\\D_AISpawnRules.json",
+      "Sha256": "2744cd1233c0fb07791c638f64fb8ea6667850ccc755d890ce3c82763fb921c6"
+    },
+    {
+      "Path": "F:\\Data\\personal\\c#\\modding\\ICARUS\\noquarrites\\mods\\noquarrites\\.cache\\prepared\\D_AISpawnConfig.json",
+      "Sha256": "632d8717bf3ccf1e481cc5e5773fbf734b89180ed03c0fb8f6467b3dc16ea4ba"
+    },
+    {
+      "Path": "F:\\Data\\personal\\c#\\modding\\ICARUS\\noquarrites\\mods\\noquarrites\\.cache\\prepared\\D_AISpawnZones.json",
+      "Sha256": "39873c44572e02b69b852b083d608eb04506339e455bb7e8cea6262b14fbfc65"
+    },
+    {
+      "Path": "F:\\Data\\personal\\c#\\modding\\ICARUS\\noquarrites\\mods\\noquarrites\\.cache\\prepared\\D_EpicCreatures.json",
+      "Sha256": "5d1f13a4af9240060bc3d3386d724fd3ea9f9cc4abe8b6075174d10b9f513cd6"
+    }
+  ]
+}
