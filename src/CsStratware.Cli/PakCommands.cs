@@ -3,6 +3,7 @@ using CsStratware.Core.Models;
 using CsStratware.Infrastructure.Logging;
 using CsStratware.Infrastructure.Operations;
 using CsStratware.ModLoader;
+using CsStratware.ModLoader.Merge;
 using CsStratware.Pak;
 
 namespace CsStratware.Cli;
@@ -17,6 +18,9 @@ internal static class PakCommands
               csmanager pak find <paks-dir|@paks> <needle> [--game <gameId>] [--path-only] [--grep] [--extracted dir] [--aes-key hex]
               csmanager pak build <content-dir> -o <out.pak> [--mount ../../../Game/]
               csmanager pak build-mod <mod-dir> [-o <out.pak>] [--mount ...] [--prepare] [--ue-pack]
+              csmanager pak check <mods-dir|paks-dir|@paks> [--game <id>] [--aes-key hex]
+              csmanager pak merge <pak1> <pak2> [...] -o <out.pak> [--last-wins] [--mount ...] [--game <id>]
+              csmanager pak merge-build <pak1> <pak2> [...] -o <out.pak> [--mods-dir dir] [--report dir] [--game <id>]
               csmanager pak patch <base.pak> <overlay-dir> -o <out.pak>
               csmanager pak extract <file.pak> <out-dir>
               csmanager pak search <file-or-dir> [--pattern text] [--ext .json] [--max 100]
@@ -86,6 +90,9 @@ internal static class PakCommands
                 "find" => Find(args),
                 "build" => Build(args),
                 "build-mod" => BuildMod(args),
+                "check" => Check(args),
+                "merge" => Merge(args),
+                "merge-build" => MergeBuild(args),
                 "patch" => Patch(args),
                 "extract" => Extract(args),
                 "search" => Search(args),
@@ -255,6 +262,197 @@ internal static class PakCommands
 
     private static string SanitizePakName(string id) =>
         id.Replace('.', '-').Replace(' ', '-');
+
+    private static int Check(string[] args)
+    {
+        if (args.Length < 1)
+            return Missing("check <mods-dir|paks-dir|@paks>");
+
+        var cfg = StratwareConfig.Load();
+        var gameId = GetArg(args, "--game");
+        var paks = ResolveCheckPakPaths(args[0], cfg, gameId);
+        if (paks.Count == 0)
+        {
+            Console.Error.WriteLine("No .pak files found for check.");
+            return 1;
+        }
+
+        var modRefs = Directory.Exists(args[0])
+            ? ModsPakResolver.ResolveFromModsDirectory(args[0])
+            : Array.Empty<ModPakReference>();
+
+        var pakOptions = ResolvePakOpenOptions(args, cfg, gameId);
+        var report = PakOverlapChecker.Analyze(paks, pakOptions);
+
+        Console.WriteLine($"checked {paks.Count} pak(s), {report.DistinctPaths} unique path(s)");
+        foreach (var pak in paks)
+        {
+            var mod = modRefs.FirstOrDefault(m => string.Equals(m.PakPath, pak, StringComparison.OrdinalIgnoreCase));
+            Console.WriteLine(mod is null ? $"  {pak}" : $"  {pak}  [{mod.ModId}]");
+        }
+
+        if (report.Conflicts.Count == 0)
+        {
+            Console.WriteLine("no path overlaps between paks.");
+            return 0;
+        }
+
+        foreach (var conflict in report.Conflicts)
+        {
+            var tag = conflict.IdenticalContent ? "SAME" : "CONFLICT";
+            Console.WriteLine($"{tag} {conflict.RelativePath}");
+            foreach (var source in conflict.Sources)
+            {
+                var mod = modRefs.FirstOrDefault(m =>
+                    string.Equals(m.PakPath, source.PakPath, StringComparison.OrdinalIgnoreCase));
+                var modTag = mod is null ? "" : $" [{mod.ModId}]";
+                var hash = source.ContentHash is null ? "" : $" sha256={source.ContentHash[..12]}...";
+                Console.WriteLine($"    {Path.GetFileName(source.PakPath)}{modTag} ({source.UncompressedSize} bytes){hash}");
+            }
+
+            if (!conflict.IdenticalContent && conflict.RelativePath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                Console.WriteLine("    hint: pak merge -o merged.pak unions UE Rows (Name/RowName); last-wins without --json-merge off");
+        }
+
+        Console.WriteLine($"overlaps: {report.Conflicts.Count} ({report.Conflicts.Count(c => !c.IdenticalContent)} content conflict(s))");
+        return report.HasContentConflicts ? 2 : 0;
+    }
+
+    private static IReadOnlyList<string> ResolveCheckPakPaths(string target, StratwareConfig cfg, string? gameId)
+    {
+        if (Directory.Exists(target))
+        {
+            var mods = ModsPakResolver.ResolveFromModsDirectory(target);
+            if (mods.Count > 0)
+                return mods.Select(m => m.PakPath).ToList();
+        }
+
+        return ResolvePakSources(target, cfg, gameId);
+    }
+
+    private static int Merge(string[] args)
+    {
+        var output = GetArg(args, "-o") ?? GetArg(args, "--output");
+        if (output is null)
+            return Missing("merge <pak1> <pak2> [...] -o <out.pak>");
+
+        var cfg = StratwareConfig.Load();
+        var gameId = GetArg(args, "--game");
+        var paks = CollectPositionalPakArgs(args, output);
+        if (paks.Count == 0)
+            return Missing("merge <pak1> <pak2> [...] -o <out.pak>");
+
+        var mount = GetArg(args, "--mount");
+        var buildOptions = mount is null ? null : new PakBuildOptions { MountPoint = mount };
+        var result = PakMerger.Merge(paks, output, new PakMergeOptions
+        {
+            PakOpenOptions = ResolvePakOpenOptions(args, cfg, gameId),
+            JsonMerge = !HasFlag(args, "--last-wins"),
+            BuildOptions = buildOptions,
+        });
+
+        Console.WriteLine($"Merged {paks.Count} pak(s) -> {result.OutputPath} ({result.FileCount} files, {result.TotalBytes} bytes)");
+        if (!HasFlag(args, "--last-wins"))
+            Console.WriteLine("JSON collisions merged via UE Rows union (Name/RowName). Use --last-wins to overwrite.");
+        return 0;
+    }
+
+    private static List<string> CollectPositionalPakArgs(string[] args, string outputPath)
+    {
+        var flagsWithValue = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "-o", "--output", "--mount", "--game", "--aes-key",
+        };
+
+        var cfg = StratwareConfig.Load();
+        var gameId = GetArg(args, "--game");
+        var paks = new List<string>();
+        for (var i = 0; i < args.Length; i++)
+        {
+            var arg = args[i];
+            if (arg.StartsWith('-'))
+            {
+                if (flagsWithValue.Contains(arg) && i + 1 < args.Length)
+                    i++;
+                continue;
+            }
+
+            if (string.Equals(arg, outputPath, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (Directory.Exists(arg))
+                paks.AddRange(ResolvePakSources(arg, cfg, gameId));
+            else if (File.Exists(arg) && arg.EndsWith(".pak", StringComparison.OrdinalIgnoreCase))
+                paks.Add(Path.GetFullPath(arg));
+            else
+                throw new FileNotFoundException($"Pak not found: {arg}");
+        }
+
+        return paks.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    private static int MergeBuild(string[] args)
+    {
+        var output = GetArg(args, "-o") ?? GetArg(args, "--output");
+        if (output is null)
+            return Missing("merge-build <pak1> <pak2> [...] -o <out.pak>");
+
+        var cfg = StratwareConfig.Load();
+        var gameId = GetArg(args, "--game");
+        var paks = CollectPositionalPakArgs(args, output);
+        if (paks.Count == 0)
+            return Missing("merge-build <pak1> <pak2> [...] -o <out.pak>");
+
+        var modsDir = GetArg(args, "--mods-dir");
+        if (!string.IsNullOrWhiteSpace(modsDir) && Directory.Exists(modsDir))
+        {
+            var order = ModLoadOrderResolver.Resolve(
+                ModDiscovery.FindModRoots(modsDir)
+                    .Select(r => ModDiscovery.TryLoadPackageAsync(r).GetAwaiter().GetResult())
+                    .Where(p => p is not null)
+                    .Cast<ModPackage>()
+                    .ToList());
+
+            var orderedPakPaths = new List<string>();
+            foreach (var mod in order.OrderedMods)
+            {
+                var refs = ModsPakResolver.ResolveFromModsDirectory(modsDir)
+                    .Where(m => string.Equals(m.ModId, mod.Manifest.Id, StringComparison.OrdinalIgnoreCase));
+                orderedPakPaths.AddRange(refs.Select(r => r.PakPath));
+            }
+
+            if (orderedPakPaths.Count > 0)
+            {
+                var extras = paks.Where(p => !orderedPakPaths.Contains(p, StringComparer.OrdinalIgnoreCase));
+                paks = orderedPakPaths.Concat(extras).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            }
+
+            foreach (var issue in order.Issues)
+                Console.Error.WriteLine($"[{issue.Severity}] {issue.ModId}: {issue.Message}");
+        }
+
+        var reportDir = GetArg(args, "--report");
+        var result = PakMergePipeline.MergeBuild(new PakMergeBuildOptions
+        {
+            PakPathsInOrder = paks,
+            OutputPakPath = output,
+            PakOpenOptions = ResolvePakOpenOptions(args, cfg, gameId),
+            BuildOptions = GetArg(args, "--mount") is { } mount
+                ? new PakBuildOptions { MountPoint = mount }
+                : null,
+            ConflictReportDirectory = reportDir,
+            JsonMerge = !HasFlag(args, "--last-wins"),
+        });
+
+        Console.WriteLine($"merge-build -> {result.Build.OutputPath} ({result.Build.FileCount} files)");
+        Console.WriteLine($"json merges: {result.JsonMergeCount}, pak path overlaps: {result.Overlaps.Count}");
+        foreach (var r in result.JsonReports.Where(x => x.TotalConflicts > 0))
+            Console.WriteLine($"  conflicts: {r.AssetLabel} ({r.TotalConflicts} property)");
+
+        if (result.Overlaps.Any(c => !c.IdenticalContent))
+            return 2;
+        return 0;
+    }
 
     private static int Patch(string[] args)
     {

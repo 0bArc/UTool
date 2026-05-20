@@ -1,5 +1,6 @@
 using CsStratware.Core.Abstractions;
 using CsStratware.Core.Models;
+using CsStratware.ModLoader.Merge;
 
 namespace CsStratware.ModLoader;
 
@@ -42,8 +43,26 @@ public sealed class JsonModLoader : IModLoader
             }
         }
 
-        ResolveLoadOrder(mods, issues);
+        ApplyLoadOrder(mods, issues);
         return new ModLoadResult { Mods = mods, Issues = issues };
+    }
+
+    private static void ApplyLoadOrder(IList<ModPackage> mods, List<ModLoadIssue> issues)
+    {
+        var order = ModLoadOrderResolver.Resolve(mods.ToList());
+        foreach (var issue in order.Issues)
+        {
+            issues.Add(new ModLoadIssue
+            {
+                Severity = issue.Severity,
+                ModId = issue.ModId,
+                Message = issue.Message,
+            });
+        }
+
+        mods.Clear();
+        foreach (var mod in order.OrderedMods)
+            mods.Add(mod);
     }
 
     private static void ValidatePackage(ModPackage package, List<ModLoadIssue> issues)
@@ -79,56 +98,4 @@ public sealed class JsonModLoader : IModLoader
         }
     }
 
-    private static void ResolveLoadOrder(IList<ModPackage> mods, List<ModLoadIssue> issues)
-    {
-        var byId = mods.ToDictionary(m => m.Manifest.Id, StringComparer.OrdinalIgnoreCase);
-        var visiting = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var ordered = new List<ModPackage>();
-
-        void Visit(ModPackage mod)
-        {
-            var id = mod.Manifest.Id;
-            if (visited.Contains(id))
-                return;
-
-            if (!visiting.Add(id))
-            {
-                issues.Add(new ModLoadIssue
-                {
-                    Severity = ModIssueSeverity.Error,
-                    ModId = id,
-                    Message = "Circular mod dependency detected.",
-                });
-                return;
-            }
-
-            foreach (var dep in mod.Manifest.Dependencies.Where(d => !d.Optional))
-            {
-                if (!byId.TryGetValue(dep.Id, out var depMod))
-                {
-                    issues.Add(new ModLoadIssue
-                    {
-                        Severity = ModIssueSeverity.Error,
-                        ModId = id,
-                        Message = $"Missing required dependency: {dep.Id}",
-                    });
-                    continue;
-                }
-
-                Visit(depMod);
-            }
-
-            visiting.Remove(id);
-            visited.Add(id);
-            ordered.Add(mod);
-        }
-
-        foreach (var mod in mods.OrderBy(m => m.Manifest.Id, StringComparer.OrdinalIgnoreCase))
-            Visit(mod);
-
-        mods.Clear();
-        foreach (var mod in ordered)
-            mods.Add(mod);
-    }
 }

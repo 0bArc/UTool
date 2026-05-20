@@ -22,7 +22,7 @@ public static class PakPatcher
 
             foreach (var entry in archive.Entries.Values.Where(e => !e.IsDeleted))
             {
-                var relative = ToRelativePath(entry.Path, archive.MountPoint);
+                var relative = PakEntryPaths.ToRelativePath(entry.Path, archive.MountPoint);
                 var target = Path.Combine(tempDir, relative.Replace('/', Path.DirectorySeparatorChar));
                 Directory.CreateDirectory(Path.GetDirectoryName(target)!);
                 var bytes = PakEntryExtractor.ReadEntry(baseStream, entry, archive.Footer);
@@ -72,11 +72,4 @@ public static class PakPatcher
         }
     }
 
-    private static string ToRelativePath(string entryPath, string mountPoint)
-    {
-        if (entryPath.StartsWith(mountPoint, StringComparison.OrdinalIgnoreCase))
-            return entryPath[mountPoint.Length..].TrimStart('/', '\\');
-
-        return entryPath.TrimStart('/', '\\');
-    }
 }

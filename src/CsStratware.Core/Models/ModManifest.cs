@@ -12,6 +12,12 @@ public sealed class ModManifest
     public string? Author { get; init; }
     public Ue4Target? Target { get; init; }
     public IReadOnlyList<ModDependency> Dependencies { get; init; } = [];
+    /// <summary>Mod ids that must load before this mod (same as soft dependencies).</summary>
+    public IReadOnlyList<string> LoadAfter { get; init; } = [];
+    /// <summary>Mod ids that must load after this mod.</summary>
+    public IReadOnlyList<string> LoadBefore { get; init; } = [];
+    /// <summary>Mod ids that cannot be active together with this mod.</summary>
+    public IReadOnlyList<string> IncompatibleWith { get; init; } = [];
     public IReadOnlyList<string> ContentRoots { get; init; } = ["content"];
     public IReadOnlyList<string> PatchFiles { get; init; } = [];
     /// <summary>Relative path to mod .csproj (e.g. code/MyMod.csproj). If omitted, single code/*.csproj is used.</summary>

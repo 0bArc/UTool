@@ -9,6 +9,7 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\src\CsStratware.Core\CsStratware.Core.csproj" />
     <ProjectReference Include="..\..\src\CsStratware.Infrastructure\CsStratware.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\CsStratware.ModLoader\CsStratware.ModLoader.csproj" />
     <ProjectReference Include="..\..\src\CsStratware.Pak\CsStratware.Pak.csproj" />
