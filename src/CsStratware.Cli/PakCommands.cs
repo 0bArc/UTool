@@ -22,7 +22,9 @@ internal static class PakCommands
               csmanager pak search <file-or-dir> [--pattern text] [--ext .json] [--max 100]
               csmanager pak cat <file.pak> <entry-path> [-o out.json]
               csmanager pak grep <file-or-dir> <needle> [--max N]
-              csmanager pak ue extract <pak> <out-dir> [--filter *Recipe*]
+              csmanager pak data list <pak|paks-dir|@paks> [--pattern *Recipe*] [--ext .json,.ini] [--game <id>] [--aes-key hex|base64]
+              csmanager pak data pull <pak|paks-dir|@paks> <out-dir> [--pattern ...] [--ext ...] [--game <id>] [--aes-key ...] [--no-ue-fallback]
+              csmanager pak ue extract <pak|paks-dir|@paks> <out-dir> [--filter *Recipe*] [--game <id>] [--aes-key ...]
               csmanager pak ue pack <content-dir> -o <out.pak> [--mount <ue-mount>] [--game <gameId>] [-compress]
             """);
     }
@@ -47,6 +49,26 @@ internal static class PakCommands
                     "extract" => UeExtract(ueArgs),
                     "pack" => UePack(ueArgs),
                     _ => Unknown($"ue {ueSub}"),
+                };
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"pak error: {ex.Message}");
+                return 1;
+            }
+        }
+
+        if (sub == "data" && args.Length > 1)
+        {
+            var dataSub = args[1].ToLowerInvariant();
+            var dataArgs = args[2..];
+            try
+            {
+                return dataSub switch
+                {
+                    "list" => DataList(dataArgs),
+                    "pull" => DataPull(dataArgs),
+                    _ => Unknown($"data {dataSub}"),
                 };
             }
             catch (Exception ex)
@@ -100,7 +122,7 @@ internal static class PakCommands
         foreach (var entry in archive.Entries.Values.OrderBy(e => e.Path, StringComparer.OrdinalIgnoreCase))
         {
             var flags = entry.IsEncrypted ? " enc" : string.Empty;
-            var comp = entry.IsCompressed ? " zlib" : string.Empty;
+            var comp = entry.IsCompressed ? $" comp#{entry.CompressionMethodIndex}" : string.Empty;
             Console.WriteLine($"  {entry.Path} ({entry.UncompressedSize} bytes){comp}{flags}");
         }
 
@@ -255,8 +277,9 @@ internal static class PakCommands
         if (args.Length < 3)
             return Missing("extract <file.pak> <out-dir>");
 
-        var archive = PakArchiveCache.Open(args[1], ResolvePakOpenOptions(args));
-        PakEntryExtractor.ExtractToDirectory(archive, args[2]);
+        var pakOptions = ResolvePakOpenOptions(args);
+        var archive = PakArchiveCache.Open(args[1], pakOptions);
+        PakEntryExtractor.ExtractToDirectory(archive, args[2], aesKey: pakOptions?.AesKey);
         Console.WriteLine($"Extracted {archive.Entries.Count} entries to {args[2]}");
         return 0;
     }
@@ -303,7 +326,8 @@ internal static class PakCommands
         var entryPath = args[2];
         var output = GetArg(args, "-o") ?? GetArg(args, "--output");
 
-        var archive = PakArchiveCache.Open(pakPath, ResolvePakOpenOptions(args));
+        var pakOptions = ResolvePakOpenOptions(args);
+        var archive = PakArchiveCache.Open(pakPath, pakOptions);
         if (!archive.Entries.TryGetValue(entryPath, out var entry))
         {
             var alt = archive.Entries.Keys.FirstOrDefault(k =>
@@ -319,7 +343,7 @@ internal static class PakCommands
         }
 
         using var stream = File.OpenRead(pakPath);
-        var data = PakEntryExtractor.ReadEntry(stream, entry, archive.Footer);
+        var data = PakEntryExtractor.ReadEntry(stream, entry, archive.Footer, pakOptions?.AesKey);
         if (output is null)
         {
             Console.Write(Encoding.UTF8.GetString(data));
@@ -384,7 +408,8 @@ internal static class PakCommands
         Console.WriteLine($"hits: {hits.Count}");
         if (hits.Count == 0)
         {
-            Console.WriteLine("tip: game data often in .uasset (Oodle). Export JSON via FModel, or:");
+            Console.WriteLine("tip: JSON/ini often readable via native reader; .uasset may need UnrealPak/FModel:");
+            Console.WriteLine("  pak data pull <paks-dir|@paks> ./extracted --pattern *Recipe* --ext .json");
             Console.WriteLine("  pak ue extract <pak> ./extracted -filter *Processor*");
             Console.WriteLine("  pak find ./extracted RequiredMillijoules");
         }
@@ -392,19 +417,126 @@ internal static class PakCommands
         return 0;
     }
 
+    private static int DataList(string[] args)
+    {
+        if (args.Length < 1)
+            return Missing("data list <pak|paks-dir|@paks> [--pattern text] [--ext .json] [--game <id>]");
+
+        var cfg = StratwareConfig.Load();
+        var gameId = GetArg(args, "--game");
+        var paks = ResolvePakSources(args[0], cfg, gameId);
+        var options = BuildDataPullOptions(args, cfg, gameId);
+        var matches = PakDataPuller.List(paks, options);
+        foreach (var match in matches)
+            Console.WriteLine($"{match.PakPath} :: {match.Entry.Path} ({match.Entry.UncompressedSize} bytes)");
+
+        Console.WriteLine($"entries: {matches.Count} in {paks.Count} pak(s)");
+        return 0;
+    }
+
+    private static int DataPull(string[] args)
+    {
+        if (args.Length < 2)
+            return Missing("data pull <pak|paks-dir|@paks> <out-dir> [--pattern ...] [--ext .json,.ini] [--game <id>]");
+
+        var cfg = StratwareConfig.Load();
+        var gameId = GetArg(args, "--game");
+        var paks = ResolvePakSources(args[0], cfg, gameId);
+        var outDir = args[1];
+        var options = BuildDataPullOptions(args, cfg, gameId);
+        var aesKey = options.PakOpenOptions?.AesKey;
+        options = new PakDataPullOptions
+        {
+            Pattern = options.Pattern,
+            Extensions = options.Extensions,
+            MaxFiles = options.MaxFiles,
+            PakOpenOptions = options.PakOpenOptions,
+            UnrealPakOptions = UnrealPakToolchain.ToOptions(cfg.ResolveUnrealPakToolchain(), aesKey),
+            UnrealPakFallback = !HasFlag(args, "--no-ue-fallback"),
+            Log = HasFlag(args, "--verbose") || HasFlag(args, "-v") ? Console.WriteLine : null,
+        };
+
+        var result = PakDataPuller.Pull(paks, outDir, options);
+        Console.WriteLine($"data pull -> {result.OutputDirectory}");
+        Console.WriteLine($"written: {result.Written} (unrealpak: {result.UnrealPakExtracted}, deferred: {result.SkippedEncrypted})");
+        if (result.Written == 0 && aesKey is null)
+            Console.WriteLine("hint: encrypted paks need pakAesKey in csstratware.json, --aes-key, or PAK_AES_KEY.");
+        return 0;
+    }
+
+    private static PakDataPullOptions BuildDataPullOptions(
+        string[] args,
+        StratwareConfig? cfg = null,
+        string? gameId = null)
+    {
+        cfg ??= StratwareConfig.Load();
+        var extArg = GetArg(args, "--ext") ?? GetArg(args, "-e");
+        var extensions = string.IsNullOrWhiteSpace(extArg)
+            ? new PakDataPullOptions().Extensions
+            : extArg.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        var max = 0;
+        if (int.TryParse(GetArg(args, "--max"), out var parsedMax) && parsedMax > 0)
+            max = parsedMax;
+
+        return new PakDataPullOptions
+        {
+            Pattern = GetArg(args, "--pattern") ?? GetArg(args, "-p"),
+            Extensions = extensions,
+            MaxFiles = max,
+            PakOpenOptions = ResolvePakOpenOptions(args, cfg, gameId),
+        };
+    }
+
     private static int UeExtract(string[] args)
     {
         if (args.Length < 2)
-            return Missing("ue extract <pak> <out-dir> [--filter wildcard]");
+            return Missing("ue extract <pak|paks-dir|@paks> <out-dir> [--filter wildcard] [--game <id>]");
 
         var cfg = StratwareConfig.Load();
-        var pak = args[0];
+        var gameId = GetArg(args, "--game");
+        var paks = ResolvePakSources(args[0], cfg, gameId);
         var outDir = args[1];
         var filter = GetArg(args, "--filter") ?? GetArg(args, "-filter") ?? GetArg(args, "-f");
-        var ue = UnrealPakToolchain.ToOptions(cfg.ResolveUnrealPakToolchain());
-        UnrealPakRunner.Extract(pak, outDir, filter, ue);
-        Console.WriteLine($"UnrealPak extract -> {Path.GetFullPath(outDir)}");
+        var pakOptions = ResolvePakOpenOptions(args, cfg, gameId);
+        var ue = UnrealPakToolchain.ToOptions(cfg.ResolveUnrealPakToolchain(), pakOptions?.AesKey);
+
+        Directory.CreateDirectory(outDir);
+        foreach (var pak in paks)
+        {
+            var dest = paks.Count == 1
+                ? outDir
+                : Path.Combine(outDir, Path.GetFileNameWithoutExtension(pak));
+            Directory.CreateDirectory(dest);
+            UnrealPakRunner.Extract(pak, dest, filter, ue);
+            Console.WriteLine($"UnrealPak extract: {pak} -> {Path.GetFullPath(dest)}");
+        }
+
+        Console.WriteLine($"UnrealPak extract done ({paks.Count} pak(s)) -> {Path.GetFullPath(outDir)}");
         return 0;
+    }
+
+    private static IReadOnlyList<string> ResolvePakSources(string target, StratwareConfig cfg, string? gameId)
+    {
+        if (StratwareConfig.IsPaksDirAlias(target))
+        {
+            var paksDir = cfg.ResolvePaksDir(gameId);
+            if (string.IsNullOrWhiteSpace(paksDir))
+            {
+                throw new InvalidOperationException(
+                    "gamePaksDir not set in csstratware.json (or games.<gameId>.paksDir). Use --game or set gamePaksDir.");
+            }
+
+            return PakPathResolver.Resolve(paksDir);
+        }
+
+        if (StratwareConfig.IsDataPakAlias(target))
+        {
+            var dataPak = cfg.ResolveDataPak(gameId);
+            return PakPathResolver.Resolve(dataPak);
+        }
+
+        return PakPathResolver.Resolve(target);
     }
 
     private static int UePack(string[] args)
@@ -473,11 +605,16 @@ internal static class PakCommands
     private static bool HasFlag(string[] args, string flag) =>
         args.Any(a => string.Equals(a, flag, StringComparison.OrdinalIgnoreCase));
 
-    private static PakOpenOptions? ResolvePakOpenOptions(string[] args)
+    private static PakOpenOptions? ResolvePakOpenOptions(
+        string[] args,
+        StratwareConfig? cfg = null,
+        string? gameId = null)
     {
-        var key = GetArg(args, "--aes-key")
-            ?? Environment.GetEnvironmentVariable("PAK_AES_KEY");
-        var bytes = PakOpenOptions.ParseAesKey(key);
+        cfg ??= StratwareConfig.Load();
+        gameId ??= GetArg(args, "--game");
+        var bytes = PakOpenOptions.ParseAesKey(GetArg(args, "--aes-key"))
+            ?? PakOpenOptions.ParseAesKey(Environment.GetEnvironmentVariable("PAK_AES_KEY"))
+            ?? cfg.ResolvePakAesKey(gameId);
         return bytes is null ? null : new PakOpenOptions { AesKey = bytes };
     }
 

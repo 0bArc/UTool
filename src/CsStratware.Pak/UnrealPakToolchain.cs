@@ -91,11 +91,12 @@ public static class UnrealPakToolchain
             : throw new InvalidOperationException($"UnrealPak sync failed under {store}");
     }
 
-    public static UnrealPakOptions ToOptions(UnrealPakToolchainPaths paths) =>
+    public static UnrealPakOptions ToOptions(UnrealPakToolchainPaths paths, byte[]? aesKey = null) =>
         new()
         {
             ExecutablePath = paths.Executable,
             EngineDir = paths.EngineDir,
+            AesKey = aesKey,
         };
 
     public static IEnumerable<string> EnumerateStoreRoots(string? configDirectory)

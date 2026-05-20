@@ -67,27 +67,13 @@ public static class PakFind
         PakFindOptions options,
         List<PakFindHit> hits)
     {
-        foreach (var pakPath in EnumerateSearchPaks(pakDirectory))
+        foreach (var pakPath in PakPathResolver.EnumeratePakFiles(pakDirectory))
         {
             var archive = PakArchiveCache.Open(pakPath, options.PakOpenOptions);
             FindInArchive(archive, needle, options, hits);
             if (hits.Count >= options.MaxResults)
                 return;
         }
-    }
-
-    private static IEnumerable<string> EnumerateSearchPaks(string pakDirectory)
-    {
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var pakPath in Directory.EnumerateFiles(pakDirectory, "*.pak"))
-        {
-            if (seen.Add(pakPath))
-                yield return pakPath;
-        }
-
-        var dataPak = Path.GetFullPath(Path.Combine(pakDirectory, "..", "Data", "data.pak"));
-        if (File.Exists(dataPak) && seen.Add(dataPak))
-            yield return dataPak;
     }
 
     private static void FindInArchive(

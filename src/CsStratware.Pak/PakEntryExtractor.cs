@@ -1,29 +1,44 @@
 using System.IO.Compression;
-using System.Security.Cryptography;
 using CsStratware.Pak.Models;
 
 namespace CsStratware.Pak;
 
 public static class PakEntryExtractor
 {
-    public static byte[] ReadEntry(Stream pakStream, PakEntryRecord entry, PakFooter footer)
+    public static byte[] ReadEntry(
+        Stream pakStream,
+        PakEntryRecord entry,
+        PakFooter footer,
+        byte[]? aesKey = null)
     {
-        if (entry.IsEncrypted)
-            throw new NotSupportedException($"Encrypted pak entry not supported: {entry.Path}");
+        if (entry.IsEncrypted && aesKey is null)
+        {
+            throw new NotSupportedException(
+                $"Encrypted pak entry '{entry.Path}'. Set pakAesKey in csstratware.json, --aes-key, or PAK_AES_KEY.");
+        }
 
         if (entry.IsCompressed)
-            return ReadCompressed(pakStream, entry, footer);
+            return ReadCompressed(pakStream, entry, footer, aesKey);
 
+        var storedSize = entry.Size > 0 ? entry.Size : entry.UncompressedSize;
+        var readSize = entry.IsEncrypted ? PakAesHelper.Align16(storedSize) : storedSize;
         pakStream.Seek(entry.Offset + entry.SerializedEntrySize, SeekOrigin.Begin);
-        var data = new byte[entry.UncompressedSize];
-        var read = pakStream.Read(data, 0, data.Length);
-        if (read != data.Length)
-            throw new EndOfStreamException($"Truncated pak entry: {entry.Path}");
+        var raw = new byte[readSize];
+        pakStream.ReadExactly(raw);
 
-        return data;
+        if (entry.IsEncrypted)
+            raw = PakAesHelper.DecryptData(raw, aesKey!);
+        else if (aesKey is not null && !PakPayloadDecoder.LooksLikeTextPayload(raw, entry.Path))
+            raw = TryDecryptOpaquePayload(raw, aesKey);
+
+        return PakPayloadDecoder.FinishEntryPayload(raw, entry.UncompressedSize, isCompressedEntry: false, entry.Path);
     }
 
-    private static byte[] ReadCompressed(Stream pakStream, PakEntryRecord entry, PakFooter footer)
+    private static byte[] ReadCompressed(
+        Stream pakStream,
+        PakEntryRecord entry,
+        PakFooter footer,
+        byte[]? aesKey)
     {
         var methodName = entry.CompressionMethodIndex < footer.CompressionMethods.Count
             ? footer.CompressionMethods[(int)entry.CompressionMethodIndex]
@@ -50,13 +65,25 @@ public static class PakEntryExtractor
 
         foreach (var block in entry.CompressionBlocks)
         {
-            var compressedSize = (int)(block.CompressedEnd - block.CompressedStart);
-            var compressed = new byte[compressedSize];
+            var storedSize = (int)(block.CompressedEnd - block.CompressedStart);
+            var readSize = entry.IsEncrypted ? (int)PakAesHelper.Align16(storedSize) : storedSize;
+            var compressed = new byte[readSize];
             var blockOffset = useRelativeOffsets
                 ? dataStart + block.CompressedStart
                 : block.CompressedStart;
             pakStream.Seek(blockOffset, SeekOrigin.Begin);
             pakStream.ReadExactly(compressed);
+
+            if (entry.IsEncrypted)
+            {
+                compressed = PakAesHelper.DecryptData(compressed, aesKey!);
+                if (compressed.Length > storedSize)
+                {
+                    var trimmed = new byte[storedSize];
+                    Array.Copy(compressed, trimmed, storedSize);
+                    compressed = trimmed;
+                }
+            }
 
             using var zlib = new ZLibStream(new MemoryStream(compressed), CompressionMode.Decompress);
             var blockRemaining = (int)Math.Min(entry.CompressionBlockSize, entry.UncompressedSize - outputOffset);
@@ -64,17 +91,21 @@ public static class PakEntryExtractor
             outputOffset += written;
         }
 
-        return output;
+        return PakPayloadDecoder.FinishEntryPayload(output, entry.UncompressedSize, isCompressedEntry: true, entry.Path);
     }
 
-    public static void ExtractToDirectory(PakArchive archive, string outputDirectory, bool preservePaths = true)
+    public static void ExtractToDirectory(
+        PakArchive archive,
+        string outputDirectory,
+        bool preservePaths = true,
+        byte[]? aesKey = null)
     {
         Directory.CreateDirectory(outputDirectory);
         using var stream = File.OpenRead(archive.FilePath);
 
         foreach (var entry in archive.Entries.Values.Where(e => !e.IsDeleted))
         {
-            var data = ReadEntry(stream, entry, archive.Footer);
+            var data = ReadEntry(stream, entry, archive.Footer, aesKey);
             var relative = preservePaths
                 ? NormalizeExtractPath(entry.Path, archive.MountPoint)
                 : Path.GetFileName(entry.Path);
@@ -85,7 +116,26 @@ public static class PakEntryExtractor
         }
     }
 
-    private static string NormalizeExtractPath(string entryPath, string mountPoint)
+    private static byte[] TryDecryptOpaquePayload(byte[] raw, byte[] aesKey)
+    {
+        if (raw.Length == 0 || raw.Length % 16 != 0)
+        {
+            var padded = new byte[PakAesHelper.Align16(raw.Length)];
+            Array.Copy(raw, padded, raw.Length);
+            raw = padded;
+        }
+
+        try
+        {
+            return PakAesHelper.DecryptData(raw, aesKey);
+        }
+        catch
+        {
+            return raw;
+        }
+    }
+
+    public static string NormalizeExtractPath(string entryPath, string mountPoint)
     {
         var path = entryPath;
         if (path.StartsWith(mountPoint, StringComparison.OrdinalIgnoreCase))

@@ -21,7 +21,6 @@ public static class PakArchiveSearch
     public static IReadOnlyList<PakSearchMatch> SearchFile(PakArchive archive, PakSearchOptions options)
     {
         var pattern = options.Pattern;
-        var comparison = options.IgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         var extensions = options.Extensions
             .Select(e => e.StartsWith('.') ? e : "." + e)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -29,11 +28,14 @@ public static class PakArchiveSearch
         var results = new List<PakSearchMatch>();
         foreach (var entry in archive.Entries.Values.Where(e => !e.IsDeleted))
         {
-            if (extensions.Count > 0 && !extensions.Any(ext => entry.Path.EndsWith(ext, comparison)))
-                continue;
+            if (extensions.Count > 0)
+            {
+                var comparison = options.IgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+                if (!extensions.Any(ext => entry.Path.EndsWith(ext, comparison)))
+                    continue;
+            }
 
-            if (!string.IsNullOrEmpty(pattern)
-                && entry.Path.IndexOf(pattern, comparison) < 0)
+            if (!PakPathPattern.Matches(entry.Path, pattern, options.IgnoreCase))
                 continue;
 
             results.Add(new PakSearchMatch { PakPath = archive.FilePath, Entry = entry });
@@ -53,7 +55,7 @@ public static class PakArchiveSearch
         if (!Directory.Exists(pakDirectory))
             return results;
 
-        foreach (var pakPath in Directory.EnumerateFiles(pakDirectory, searchPattern))
+        foreach (var pakPath in PakPathResolver.EnumeratePakFiles(pakDirectory))
         {
             var archive = PakArchiveCache.Open(pakPath);
             var remaining = options.MaxResults - results.Count;

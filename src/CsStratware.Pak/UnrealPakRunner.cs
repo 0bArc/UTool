@@ -9,6 +9,8 @@ public sealed class UnrealPakOptions
     public string? EngineDir { get; init; }
     public string? ProjectDir { get; init; }
     public string? EncryptionIni { get; init; }
+    public string? CryptoKeysPath { get; init; }
+    public byte[]? AesKey { get; init; }
 }
 
 public static class UnrealPakRunner
@@ -148,6 +150,12 @@ public static class UnrealPakRunner
             allArgs.Add($"-projectdir={Quote(options.ProjectDir)}");
         if (!string.IsNullOrWhiteSpace(options?.EncryptionIni))
             allArgs.Add($"-encryptionini={options.EncryptionIni}");
+
+        var cryptoKeys = options?.CryptoKeysPath;
+        if (string.IsNullOrWhiteSpace(cryptoKeys) && options?.AesKey is { Length: 32 } key)
+            cryptoKeys = PakCryptoKeys.WriteCryptoJson(key);
+        if (!string.IsNullOrWhiteSpace(cryptoKeys))
+            allArgs.Add($"-cryptokeys={Quote(cryptoKeys)}");
 
         var psi = new ProcessStartInfo
         {

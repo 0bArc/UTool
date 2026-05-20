@@ -17,6 +17,17 @@ public sealed class PakOpenOptions
         if (keyMaterial.Length == 64 && keyMaterial.All(Uri.IsHexDigit))
             return Convert.FromHexString(keyMaterial);
 
+        try
+        {
+            var fromBase64 = Convert.FromBase64String(keyMaterial);
+            if (fromBase64.Length == 32)
+                return fromBase64;
+        }
+        catch (FormatException)
+        {
+            // not base64
+        }
+
         var bytes = System.Text.Encoding.UTF8.GetBytes(keyMaterial);
         return bytes.Length == 32 ? bytes : null;
     }

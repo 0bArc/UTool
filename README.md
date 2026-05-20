@@ -38,7 +38,7 @@ dist\csmanager\csmanager.exe help
 | Area | CLI / behavior |
 |------|----------------|
 | **Mods** | `list`, `validate`, `compile` — `mod.json`, C# `[PatchAsset]` / `[PatchPlayerData]`, JSON patches |
-| **Paks** | `pak build-mod`, extract, grep, index — UnrealPak for game-ready `*_P.pak` |
+| **Paks** | `pak data pull/list`, `pak find`, `pak ue extract` (dir or `@paks`), build-mod — UnrealPak for `*_P.pak` |
 | **Saves** | `playerdata` — local UE4 player data (e.g. accolades) |
 | **Setup** | `setup unrealpak` — bundled `assets/UnrealPak.zip` or custom engine path |
 

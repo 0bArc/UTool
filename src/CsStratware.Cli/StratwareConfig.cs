@@ -18,6 +18,9 @@ public sealed class GameSettings
 
     [JsonPropertyName("mountPoint")]
     public string? MountPoint { get; init; }
+
+    [JsonPropertyName("pakAesKey")]
+    public string? PakAesKey { get; init; }
 }
 
 public sealed class StratwareConfig
@@ -44,6 +47,9 @@ public sealed class StratwareConfig
 
     [JsonPropertyName("unrealEngineDir")]
     public string? UnrealEngineDir { get; init; }
+
+    [JsonPropertyName("pakAesKey")]
+    public string? PakAesKey { get; init; }
 
     [JsonPropertyName("games")]
     public Dictionary<string, GameSettings>? Games { get; init; }
@@ -122,6 +128,13 @@ public sealed class StratwareConfig
         }
 
         return Ue4PlayerDataLocator.Resolve(gameId: gameId);
+    }
+
+    public byte[]? ResolvePakAesKey(string? gameId = null)
+    {
+        var game = ResolveGame(gameId);
+        var material = game?.PakAesKey ?? PakAesKey;
+        return PakOpenOptions.ParseAesKey(material);
     }
 
     public string? ResolveExtractedDir()
