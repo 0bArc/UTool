@@ -23,10 +23,23 @@
               "properties": {
                 "op": {
                   "type": "string",
-                  "enum": ["add", "replace", "remove"]
+                  "enum": [
+                    "add",
+                    "append",
+                    "merge",
+                    "replace",
+                    "remove",
+                    "replaceall",
+                    "removewhere",
+                    "setwhere",
+                    "removepropertywhere"
+                  ]
                 },
                 "path": { "type": "string" },
-                "value": {}
+                "value": {},
+                "matchProperty": { "type": "string" },
+                "matchValue": {},
+                "targetPath": { "type": "string" }
               },
               "additionalProperties": false
             }

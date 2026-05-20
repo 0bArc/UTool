@@ -15,10 +15,66 @@ public sealed class JsonAssetEditor
     }
 
     public void Replace(string jsonPointer, object? value) =>
-        SetAtPointer(_root, jsonPointer, JsonValue.Create(value), replace: true);
+        SetAtPointer(_root, jsonPointer, JsonNodeConversion.ToNode(value), replace: true, createMissing: false);
 
     public void Add(string jsonPointer, object? value) =>
-        SetAtPointer(_root, jsonPointer, JsonValue.Create(value), replace: false);
+        SetAtPointer(_root, jsonPointer, JsonNodeConversion.ToNode(value), replace: false, createMissing: false);
+
+    /// <summary>Set value at pointer; creates missing object segments along the path.</summary>
+    public void Set(string jsonPointer, object? value) =>
+        SetAtPointer(_root, jsonPointer, JsonNodeConversion.ToNode(value), replace: true, createMissing: true);
+
+    /// <summary>Append an element to the array at <paramref name="arrayPointer"/>.</summary>
+    public void Append(string arrayPointer, object? value)
+    {
+        var node = JsonNodeConversion.ToNode(value)
+            ?? throw new ArgumentException("Value is required.", nameof(value));
+        ResolveArray(arrayPointer).Add(node);
+    }
+
+    /// <summary>Parse JSON and append to the array at <paramref name="arrayPointer"/>.</summary>
+    public void AppendJson(string arrayPointer, string json) =>
+        Append(arrayPointer, JsonNode.Parse(json) ?? throw new InvalidOperationException("JSON is null."));
+
+    /// <summary>Deep-merge an object at <paramref name="jsonPointer"/> (creates path if needed).</summary>
+    public void MergeInto(string jsonPointer, object? value)
+    {
+        var overlay = JsonNodeConversion.ToNode(value) as JsonObject
+            ?? throw new ArgumentException("Merge value must be a JSON object.", nameof(value));
+
+        var target = ResolveOrCreateObject(_root, jsonPointer);
+        DeepMergeObjects(target, overlay);
+    }
+
+    /// <summary>Update row matching <paramref name="keyProperty"/> or append if missing.</summary>
+    /// <returns>(added, updated) counts.</returns>
+    public (int Added, int Updated) UpsertArrayElement(
+        string arrayPointer,
+        string keyProperty,
+        object? keyValue,
+        object? element,
+        bool merge = true)
+    {
+        var row = JsonNodeConversion.ToNode(element) as JsonObject
+            ?? throw new ArgumentException("Element must be a JSON object.", nameof(element));
+
+        var arr = ResolveArray(arrayPointer);
+        for (var i = 0; i < arr.Count; i++)
+        {
+            if (arr[i] is not JsonObject existing || !PropertyMatches(existing, keyProperty, keyValue))
+                continue;
+
+            if (merge)
+                DeepMergeObjects(existing, row);
+            else
+                arr[i] = row.DeepClone();
+
+            return (0, 1);
+        }
+
+        arr.Add(row.DeepClone());
+        return (1, 0);
+    }
 
     public void Remove(string jsonPointer) => RemoveAtPointer(_root, jsonPointer);
 
@@ -50,10 +106,11 @@ public sealed class JsonAssetEditor
         object? value)
     {
         var pointer = NormalizeRelativePointer(propertyPointer);
+        var node = JsonNodeConversion.ToNode(value);
         var updated = 0;
         foreach (var obj in EnumerateMatchingArrayObjects(arrayPointer, matchProperty, matchValue))
         {
-            SetAtPointer(obj, pointer, JsonValue.Create(value), replace: true);
+            SetAtPointer(obj, pointer, node, replace: true, createMissing: true);
             updated++;
         }
 
@@ -86,12 +143,13 @@ public sealed class JsonAssetEditor
     /// <summary>Replace property only within subtree at <paramref name="underPointer"/> (JSON pointer).</summary>
     public void ReplaceAll(string propertyName, object? value, string? underPointer)
     {
+        var nodeValue = JsonNodeConversion.ToNode(value);
         if (string.IsNullOrWhiteSpace(underPointer))
         {
             Walk(_root, node =>
             {
                 if (node is JsonObject obj && obj.ContainsKey(propertyName))
-                    obj[propertyName] = JsonValue.Create(value);
+                    obj[propertyName] = nodeValue?.DeepClone();
             });
             return;
         }
@@ -102,7 +160,7 @@ public sealed class JsonAssetEditor
         Walk(subtree, node =>
         {
             if (node is JsonObject obj && obj.ContainsKey(propertyName))
-                obj[propertyName] = JsonValue.Create(value);
+                obj[propertyName] = nodeValue?.DeepClone();
         });
     }
 
@@ -205,25 +263,46 @@ public sealed class JsonAssetEditor
         }
     }
 
-    private static void SetAtPointer(JsonNode root, string pointer, JsonNode? value, bool replace)
+    private static void SetAtPointer(
+        JsonNode root,
+        string pointer,
+        JsonNode? value,
+        bool replace,
+        bool createMissing)
     {
-        var (parent, key) = ResolveParent(root, pointer);
+        var (parent, key) = ResolveParent(root, pointer, createMissing);
+        ApplyToParent(parent, key, value, replace);
+    }
+
+    private static void ApplyToParent(JsonNode parent, string key, JsonNode? value, bool replace)
+    {
         if (parent is JsonObject obj)
-            obj[key] = value;
-        else if (parent is JsonArray arr && int.TryParse(key, out var index))
         {
-            if (replace)
-                arr[index] = value;
-            else
-                arr.Insert(index, value);
+            obj[key] = value;
+            return;
         }
+
+        if (parent is not JsonArray arr)
+            throw new InvalidOperationException($"Cannot set value at parent type {parent.GetType().Name}");
+
+        if (key == "-")
+        {
+            arr.Add(value);
+            return;
+        }
+
+        if (!int.TryParse(key, out var index))
+            throw new InvalidOperationException($"Invalid array index '{key}'.");
+
+        if (replace)
+            arr[index] = value;
         else
-            throw new InvalidOperationException($"Cannot set value at {pointer}");
+            arr.Insert(index, value);
     }
 
     private static void RemoveAtPointer(JsonNode root, string pointer)
     {
-        var (parent, key) = ResolveParent(root, pointer);
+        var (parent, key) = ResolveParent(root, pointer, createMissing: false);
         if (parent is JsonObject obj)
             obj.Remove(key);
         else if (parent is JsonArray arr && int.TryParse(key, out var index))
@@ -232,7 +311,44 @@ public sealed class JsonAssetEditor
             throw new InvalidOperationException($"Cannot remove at {pointer}");
     }
 
-    private static (JsonNode Parent, string Key) ResolveParent(JsonNode root, string pointer)
+    private static JsonObject ResolveOrCreateObject(JsonNode root, string pointer)
+    {
+        if (!pointer.StartsWith('/'))
+            throw new FormatException($"JSON pointer must start with '/': {pointer}");
+
+        var segments = pointer.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .Select(Unescape)
+            .ToList();
+
+        if (segments.Count == 0)
+        {
+            if (root is JsonObject obj)
+                return obj;
+
+            throw new InvalidOperationException("Root is not an object.");
+        }
+
+        var current = root;
+        foreach (var segment in segments)
+        {
+            var next = Navigate(current, segment);
+            if (next is null)
+            {
+                next = new JsonObject();
+                AssignChild(current, segment, next);
+            }
+
+            current = next;
+        }
+
+        return current as JsonObject
+            ?? throw new InvalidOperationException($"JSON node at {pointer} is not an object.");
+    }
+
+    private static (JsonNode Parent, string Key) ResolveParent(
+        JsonNode root,
+        string pointer,
+        bool createMissing)
     {
         if (!pointer.StartsWith('/'))
             throw new FormatException($"JSON pointer must start with '/': {pointer}");
@@ -247,11 +363,41 @@ public sealed class JsonAssetEditor
         var current = root;
         for (var i = 0; i < segments.Count - 1; i++)
         {
-            current = Navigate(current, segments[i])
-                ?? throw new InvalidOperationException($"Missing segment '{segments[i]}' in {pointer}");
+            var segment = segments[i];
+            var next = Navigate(current, segment);
+            if (next is null)
+            {
+                if (!createMissing)
+                    throw new InvalidOperationException($"Missing segment '{segment}' in {pointer}");
+
+                next = new JsonObject();
+                AssignChild(current, segment, next);
+            }
+
+            current = next;
         }
 
         return (current, segments[^1]);
+    }
+
+    private static void AssignChild(JsonNode parent, string segment, JsonNode child)
+    {
+        switch (parent)
+        {
+            case JsonObject obj:
+                obj[segment] = child;
+                break;
+            case JsonArray arr when int.TryParse(segment, out var index):
+                if (index < 0 || index > arr.Count)
+                    throw new InvalidOperationException($"Array index out of range: {index}");
+                if (index == arr.Count)
+                    arr.Add(child);
+                else
+                    arr[index] = child;
+                break;
+            default:
+                throw new InvalidOperationException($"Cannot assign child under {parent.GetType().Name}.");
+        }
     }
 
     private static JsonNode? Navigate(JsonNode node, string segment)
@@ -263,6 +409,28 @@ public sealed class JsonAssetEditor
             return arr[index];
 
         return null;
+    }
+
+    private static void DeepMergeObjects(JsonObject target, JsonObject overlay)
+    {
+        foreach (var (key, overlayValue) in overlay)
+        {
+            if (overlayValue is null)
+            {
+                target.Remove(key);
+                continue;
+            }
+
+            if (target.TryGetPropertyValue(key, out var existing)
+                && existing is JsonObject existingObj
+                && overlayValue is JsonObject overlayObj)
+            {
+                DeepMergeObjects(existingObj, overlayObj);
+                continue;
+            }
+
+            target[key] = overlayValue.DeepClone();
+        }
     }
 
     private static string Unescape(string segment) =>
@@ -309,7 +477,7 @@ public sealed class JsonAssetEditor
         if (!obj.TryGetPropertyValue(propertyName, out var actual))
             return expected is null;
 
-        return JsonValuesEqual(actual, JsonValue.Create(expected));
+        return JsonValuesEqual(actual, JsonNodeConversion.ToNode(expected));
     }
 
     private static bool JsonValuesEqual(JsonNode? actual, JsonNode? expected)

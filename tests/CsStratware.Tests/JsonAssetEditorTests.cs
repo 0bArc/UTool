@@ -1,3 +1,5 @@
+using System.Text.Json;
+using CsStratware.Core.Json;
 using CsStratware.ModLoader;
 using CsStratware.Sdk;
 using Xunit;
@@ -98,5 +100,92 @@ public sealed class JsonAssetEditorTests
         Assert.DoesNotContain("Juvenile_RockGolem", json);
         Assert.Contains("RockGolem", json);
         Assert.DoesNotContain("RockGolemExtraDamage", json);
+    }
+
+    [Fact]
+    public void Append_adds_full_ue_datatable_row()
+    {
+        const string rowJson = """
+            {
+              "Name": "Juvenile_Ape",
+              "CreatureName": "NSLOCTEXT(\"D_AICreatureType\", \"Juvenile_Ape-CreatureName\", \"Garganutan\")",
+              "Tag": { "TagName": "NPC.JuvenileApe" },
+              "AdditionalDamageStat": { "Value": "ApeJuvenileExtraDamage_+%" },
+              "Metadata": { "RequiredFeatureLevel": { "RowName": "GreatHunts" } }
+            }
+            """;
+
+        var editor = new JsonAssetEditor("""{ "Rows": [] }""");
+        editor.Append("/Rows", rowJson);
+        var outJson = editor.ToJson();
+
+        Assert.Contains("Juvenile_Ape", outJson);
+        Assert.Contains("NPC.JuvenileApe", outJson);
+        Assert.Contains("GreatHunts", outJson);
+    }
+
+    [Fact]
+    public void UpsertArrayElement_adds_then_merges_nested_fields()
+    {
+        var editor = new JsonAssetEditor(CreatureTableJson);
+        var (added, updated) = editor.UpsertArrayElement(
+            "/Rows",
+            "Name",
+            "Juvenile_Ape",
+            """{ "Name": "Juvenile_Ape", "Tag": { "TagName": "NPC.JuvenileApe" } }""");
+        Assert.Equal(1, added);
+        Assert.Equal(0, updated);
+        Assert.Contains("NPC.JuvenileApe", editor.ToJson());
+
+        (_, updated) = editor.UpsertArrayElement(
+            "/Rows",
+            "Name",
+            "Juvenile_Ape",
+            """{ "Metadata": { "RequiredFeatureLevel": { "RowName": "GreatHunts" } } }""");
+        Assert.Equal(1, updated);
+        Assert.Contains("GreatHunts", editor.ToJson());
+    }
+
+    [Fact]
+    public void Set_creates_missing_nested_path_on_row()
+    {
+        var editor = new JsonAssetEditor(CreatureTableJson);
+        var updated = editor.SetOnArrayElementsWhere(
+            "/Rows",
+            "Name",
+            "RockGolem",
+            "/Metadata/RequiredFeatureLevel/RowName",
+            "GreatHunts");
+        Assert.Equal(1, updated);
+        Assert.Contains("GreatHunts", editor.ToJson());
+    }
+
+    [Fact]
+    public void JsonAssetPatcher_append_deserializes_object_value()
+    {
+        const string patchDoc = """
+            {
+              "patches": [
+                {
+                  "assetPath": "D_AICreatureType.json",
+                  "operations": [
+                    {
+                      "op": "append",
+                      "path": "/Rows",
+                      "value": {
+                        "Name": "Juvenile_Ape",
+                        "Tag": { "TagName": "NPC.JuvenileApe" }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
+
+        var doc = JsonSerializer.Deserialize<AssetPatchDocument>(patchDoc, StratwareJson.Options)!;
+        var json = JsonAssetPatcher.Apply("""{ "Rows": [] }""", doc.Patches[0].Operations);
+        Assert.Contains("Juvenile_Ape", json);
+        Assert.Contains("NPC.JuvenileApe", json);
     }
 }

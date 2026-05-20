@@ -18,6 +18,12 @@ public static class JsonAssetPatcher
                 case "add":
                     editor.Add(op.Path, op.Value);
                     break;
+                case "append":
+                    editor.Append(op.Path, op.Value);
+                    break;
+                case "merge":
+                    editor.MergeInto(op.Path, op.Value);
+                    break;
                 case "remove":
                     editor.Remove(op.Path);
                     break;
