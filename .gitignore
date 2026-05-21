@@ -34,7 +34,7 @@ debug-*.log
 ## UnrealPak (extract locally; zip optional — not required in git)
 tools/UnrealPak/
 assets/UnrealPak/
-assets/*.zip
+
 
 ## Agent / Cursor local
 .agents/
