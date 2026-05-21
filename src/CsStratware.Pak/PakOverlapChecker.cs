@@ -12,6 +12,12 @@ public static class PakOverlapChecker
         if (pakPaths.Count == 0)
             throw new ArgumentException("At least one pak path is required.", nameof(pakPaths));
 
+        var mergeMount = pakPaths.Count > 1
+            ? PakEntryPaths.CommonMountPoint(
+                pakPaths.Select(p => PakArchiveCache.Open(p, openOptions).MountPoint))
+            : null;
+        mergeMount = string.IsNullOrWhiteSpace(mergeMount) ? null : PakEntryPaths.NormalizeMountPoint(mergeMount);
+
         var byRelative = new Dictionary<string, List<(string PakPath, string EntryPath, long Size)>>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var pakPath in pakPaths)
@@ -19,7 +25,9 @@ public static class PakOverlapChecker
             var archive = PakArchiveCache.Open(pakPath, openOptions);
             foreach (var entry in archive.Entries.Values.Where(e => !e.IsDeleted))
             {
-                var relative = PakEntryPaths.ToRelativePath(entry.Path, archive.MountPoint);
+                var relative = mergeMount is null
+                    ? PakEntryPaths.ToRelativePath(entry.Path, archive.MountPoint)
+                    : PakEntryPaths.ToRelativePath(entry.Path, mergeMount);
                 if (!byRelative.TryGetValue(relative, out var sources))
                 {
                     sources = [];
@@ -36,7 +44,7 @@ public static class PakOverlapChecker
             if (rawSources.Count < 2)
                 continue;
 
-            var sources = HashSources(rawSources, openOptions);
+            var sources = HashSources(rawSources, openOptions, mergeMount);
             var hashes = sources.Select(s => s.ContentHash).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             conflicts.Add(new PakOverlapConflict
             {
@@ -58,7 +66,8 @@ public static class PakOverlapChecker
 
     private static List<PakOverlapSource> HashSources(
         IReadOnlyList<(string PakPath, string EntryPath, long Size)> rawSources,
-        PakOpenOptions? openOptions)
+        PakOpenOptions? openOptions,
+        string? mergeMount)
     {
         var result = new List<PakOverlapSource>(rawSources.Count);
         foreach (var pakGroup in rawSources.GroupBy(s => s.PakPath, StringComparer.OrdinalIgnoreCase))
@@ -71,7 +80,8 @@ public static class PakOverlapChecker
                     continue;
 
                 var bytes = PakEntryExtractor.ReadEntry(stream, entry, archive.Footer, openOptions?.AesKey);
-                var relative = PakEntryPaths.ToRelativePath(entry.Path, archive.MountPoint);
+                var relativeMount = mergeMount ?? PakEntryPaths.NormalizeMountPoint(archive.MountPoint);
+                var relative = PakEntryPaths.ToRelativePath(entry.Path, relativeMount);
                 result.Add(new PakOverlapSource
                 {
                     PakPath = pakPath,

@@ -20,6 +20,8 @@ public sealed class ModManifest
     public IReadOnlyList<string> IncompatibleWith { get; init; } = [];
     public IReadOnlyList<string> ContentRoots { get; init; } = ["content"];
     public IReadOnlyList<string> PatchFiles { get; init; } = [];
+    /// <summary>Optional folder of *.curve.json specs (default: curves/).</summary>
+    public string? CurvePatchesDir { get; init; }
     /// <summary>Relative path to mod .csproj (e.g. code/MyMod.csproj). If omitted, single code/*.csproj is used.</summary>
     public string? CodeProject { get; init; }
     public ModPakSettings? Pak { get; init; }
@@ -30,6 +32,8 @@ public sealed class ModPakSettings
     public string? Output { get; init; }
     public string? MountPoint { get; init; }
     public string? SourcePak { get; init; }
+    /// <summary>Pak(s) containing CurveFloat .uasset files (path or @paks).</summary>
+    public string? CurveSourcePak { get; init; }
     public string? SourceFilter { get; init; }
     public bool UseUnrealPak { get; init; }
 }

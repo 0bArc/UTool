@@ -11,4 +11,7 @@
   <ItemGroup>
     <Compile Include="build.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="UAssetAPI" Version="1.0.3" />
+  </ItemGroup>
 </Project>

@@ -47,6 +47,11 @@ public static class SafeJsonFileWriter
             {
                 try { File.Delete(tempPath); } catch { /* ignore */ }
             }
+
+            if (!keepBackup && File.Exists(backupPath))
+            {
+                try { File.Delete(backupPath); } catch { /* ignore */ }
+            }
         }
     }
 

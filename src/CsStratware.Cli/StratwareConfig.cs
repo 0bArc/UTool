@@ -83,6 +83,22 @@ public sealed class StratwareConfig
             : token;
     }
 
+    public IReadOnlyList<string> ResolveSourcePakPaths(string? token, string? gameId = null)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+            return [];
+
+        if (IsPaksDirAlias(token))
+        {
+            var paksDir = ResolvePaksDir(gameId)
+                ?? throw new InvalidOperationException("paksDir not configured for @paks alias.");
+            return PakPathResolver.Resolve(paksDir);
+        }
+
+        var single = ResolveSourcePak(token, gameId);
+        return string.IsNullOrWhiteSpace(single) ? [] : [single];
+    }
+
     public string? ResolvePaksDir(string? gameId = null)
     {
         var game = ResolveGame(gameId);

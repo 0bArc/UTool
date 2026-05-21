@@ -13,6 +13,31 @@ public static class UeDataTableMerger
 
     private static readonly JsonSerializerOptions SerializeOptions = new() { WriteIndented = false };
 
+    /// <summary>Count <c>Rows</c>/<c>rows</c> array entries when present; else 0.</summary>
+    public static int CountDataTableRows(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return 0;
+
+        try
+        {
+            if (JsonNode.Parse(json) is not JsonObject root)
+                return 0;
+
+            foreach (var rowsKey in new[] { "Rows", "rows" })
+            {
+                if (root[rowsKey] is JsonArray rows)
+                    return rows.Count;
+            }
+        }
+        catch (JsonException)
+        {
+            return 0;
+        }
+
+        return 0;
+    }
+
     public static UeDataTableMergeResult MergeChain(
         IReadOnlyList<string> jsonLayers,
         UeDataTableMergeOptions? options = null)
@@ -72,7 +97,8 @@ public static class UeDataTableMerger
             return clone;
         }
 
-        return overlayNode.DeepClone();
+        // Mismatched root types: keep base tree (do not replace entire asset with overlay-only payload).
+        return baseNode.DeepClone();
     }
 
     private static bool TryMergeRowsContainer(

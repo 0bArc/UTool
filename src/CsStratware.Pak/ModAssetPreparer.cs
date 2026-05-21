@@ -8,12 +8,16 @@ using CsStratware.Infrastructure.Operations;
 using CsStratware.Infrastructure.Pipeline;
 using CsStratware.Infrastructure.Validation;
 using CsStratware.ModLoader;
+using CsStratware.ModLoader.Curves;
 
 namespace CsStratware.Pak;
 
 public sealed class ModPrepareOptions
 {
     public string? SourcePakPath { get; init; }
+    public IReadOnlyList<string> CurveSourcePakPaths { get; init; } = [];
+    public byte[]? PakAesKey { get; init; }
+    public UnrealPakOptions? UnrealPakOptions { get; init; }
     public string? ExtractedDir { get; init; }
     public string? UnrealPakExecutable { get; init; }
     public bool ForceExtract { get; init; }
@@ -56,11 +60,12 @@ public static class ModAssetPreparer
             .Where(path => AssetShouldPrepare(path, jsonPatchesByAsset, codePatches, saves))
             .ToList();
 
-        if (assetPaths.Count == 0)
+        var hasCurvePatches = HasCurvePatches(mod);
+        if (assetPaths.Count == 0 && !hasCurvePatches)
         {
             var reason = codePatches.Count > 0 && saves is not null
                 ? "conditional asset patch did not apply (check PlayerData / boss completion)"
-                : "add [PatchAsset] code patches or patchFiles";
+                : "add [PatchAsset] code patches, patchFiles, or curves/*.curve.json";
             throw new InvalidOperationException($"No assets to prepare for mod '{mod.Manifest.Id}': {reason}.");
         }
 
@@ -88,26 +93,50 @@ public static class ModAssetPreparer
             ExecutablePath = options.UnrealPakExecutable,
         });
 
-        var preparedFiles = ParallelPatchPipeline.Map(
-            assetPaths,
-            assetPath => PrepareOneAsset(
-                mod,
-                assetPath,
-                preparedRoot,
-                options,
-                jsonPatchesByAsset,
-                codePatches,
-                saves,
-                extractionPipeline),
-            op);
+        var preparedFiles = assetPaths.Count == 0
+            ? []
+            : ParallelPatchPipeline.Map(
+                assetPaths,
+                assetPath => PrepareOneAsset(
+                    mod,
+                    assetPath,
+                    preparedRoot,
+                    options,
+                    jsonPatchesByAsset,
+                    codePatches,
+                    saves,
+                    extractionPipeline),
+                op).ToList();
 
-        incremental.Record("prepare", inputHashes, preparedFiles.ToList());
+        if (hasCurvePatches)
+        {
+            var curveFiles = ModCurvePreparer.Prepare(
+                mod,
+                preparedRoot,
+                new ModCurvePrepareOptions
+                {
+                    SourcePakPaths = options.CurveSourcePakPaths,
+                    AesKey = options.PakAesKey,
+                    UnrealPakOptions = options.UnrealPakOptions,
+                    ForceRefresh = options.ForceExtract,
+                });
+            preparedFiles.AddRange(curveFiles);
+        }
+
+        incremental.Record("prepare", inputHashes, preparedFiles);
 
         return new ModPrepareResult
         {
             PreparedContentDir = preparedRoot,
             PreparedFiles = preparedFiles,
         };
+    }
+
+    private static bool HasCurvePatches(ModPackage mod)
+    {
+        var dir = Path.Combine(mod.RootPath, mod.Manifest.CurvePatchesDir ?? "curves");
+        return Directory.Exists(dir)
+            && Directory.EnumerateFiles(dir, "*.curve.json", SearchOption.TopDirectoryOnly).Any();
     }
 
     private static string PrepareOneAsset(
@@ -158,6 +187,13 @@ public static class ModAssetPreparer
             var path = Path.Combine(mod.RootPath, patchFile);
             if (File.Exists(path))
                 hashes[path] = ContentHasher.HashFile(path);
+        }
+
+        var curvesDir = Path.Combine(mod.RootPath, mod.Manifest.CurvePatchesDir ?? "curves");
+        if (Directory.Exists(curvesDir))
+        {
+            foreach (var curve in Directory.EnumerateFiles(curvesDir, "*.curve.json"))
+                hashes[curve] = ContentHasher.HashFile(curve);
         }
 
         if (!string.IsNullOrWhiteSpace(options.CompiledAssemblyPath) && File.Exists(options.CompiledAssemblyPath))

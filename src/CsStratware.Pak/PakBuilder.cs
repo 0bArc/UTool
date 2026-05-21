@@ -41,6 +41,19 @@ public static class PakBuilder
 
         var sourceFiles = files.ToList();
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPakPath))!);
+        // #region agent log
+        DebugLog("PakBuilder.cs:Build", "build input summary", "H4", new
+        {
+            output = Path.GetFileName(outputPakPath),
+            mountPoint,
+            sourceCount = sourceFiles.Count,
+            totalInputBytes = sourceFiles.Sum(f => new FileInfo(f.FullPath).Length),
+            sample = sourceFiles
+                .Take(12)
+                .Select(f => new { f.Path, bytes = new FileInfo(f.FullPath).Length })
+                .ToArray(),
+        });
+        // #endregion
 
         using var stream = File.Create(outputPakPath);
         var staged = new List<StagedEntry>(sourceFiles.Count);
@@ -149,6 +162,28 @@ public static class PakBuilder
     {
         var relative = Path.GetRelativePath(root, fullPath).Replace('\\', '/');
         return relative;
+    }
+
+    private static void DebugLog(string location, string message, string hypothesisId, object data)
+    {
+        try
+        {
+            var payload = new
+            {
+                sessionId = "1ee33a",
+                runId = "pre-fix",
+                hypothesisId,
+                location,
+                message,
+                data,
+                timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            };
+            File.AppendAllText(@"f:\Data\personal\c#\csStratware\debug-1ee33a.log", System.Text.Json.JsonSerializer.Serialize(payload) + Environment.NewLine);
+        }
+        catch
+        {
+            // Debug logging must not affect pak build behavior.
+        }
     }
 
     private sealed record StagedEntry(string RelativePath, PakEntryRecord Record);

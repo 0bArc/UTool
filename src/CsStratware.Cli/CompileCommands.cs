@@ -52,16 +52,22 @@ internal static class CompileCommands
                 return 0;
 
             var cfg = StratwareConfig.Load(modDir);
-            var sourcePak = cfg.ResolveSourcePak(package.Manifest.Pak?.SourcePak, package.Manifest.Target?.GameId);
+            var gameId = package.Manifest.Target?.GameId;
+            var sourcePak = cfg.ResolveSourcePak(package.Manifest.Pak?.SourcePak, gameId);
+            var curveSource = package.Manifest.Pak?.CurveSourcePak ?? "@paks";
+            var curveSourcePaks = cfg.ResolveSourcePakPaths(curveSource, gameId);
 
             var toolchain = cfg.ResolveUnrealPakToolchain();
             var prepared = ModAssetPreparer.Prepare(package, new ModPrepareOptions
             {
                 SourcePakPath = sourcePak,
+                CurveSourcePakPaths = curveSourcePaks,
+                PakAesKey = cfg.ResolvePakAesKey(gameId),
+                UnrealPakOptions = UnrealPakToolchain.ToOptions(toolchain, cfg.ResolvePakAesKey(gameId)),
                 ExtractedDir = cfg.ResolveExtractedDir(),
                 UnrealPakExecutable = toolchain.Executable,
                 CompiledAssemblyPath = result.AssemblyPath,
-                PlayerDataRoot = cfg.ResolvePlayerDataDir(package.Manifest.Target?.GameId),
+                PlayerDataRoot = cfg.ResolvePlayerDataDir(gameId),
                 ForceExtract = HasFlag(args, "--force-extract"),
             });
 
