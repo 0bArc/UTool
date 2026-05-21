@@ -12,7 +12,7 @@ In Icarus, that field is the “energy cost” on bio processor recipes (stored 
 |-------|-----|
 | **.NET 8 SDK** | Builds `csmanager` and your mod’s small C# patch DLL |
 | **Icarus (Steam)** | Game files; `data.pak` is the recipe source |
-| **UnrealPak** | Bundled in `assets/UnrealPak.zip` — auto-extracts; no manual install |
+| **UnrealPak** | Local `assets/UnrealPak.zip` or `setup unrealpak --from` — see [assets/README.md](assets/README.md) |
 | **This repo built** | Gives you the `csmanager` CLI |
 
 Optional but easiest: use the sibling demo workspace **[csStratwareDemo](../csStratwareDemo)** — it already contains a working `mods/processor-850` mod.
@@ -50,7 +50,7 @@ Edit `csstratware.json` — at minimum set:
 
 - `icarusDataPak` — path to `Icarus/Content/Data/data.pak` (see [csstratware.json.example](csstratware.json.example))
 
-UnrealPak comes from **`assets/UnrealPak.zip`** in the csStratware repo. First pack extracts it automatically. Optional:
+UnrealPak: put **`assets/UnrealPak.zip`** in this repo, or point at an Epic UE install. First pack extracts to `assets/UnrealPak/`. Optional:
 
 ```powershell
 csmanager setup unrealpak
@@ -215,7 +215,7 @@ You change **one property name** everywhere in that JSON tree. The tool ships th
 | Problem | What to try |
 |---------|-------------|
 | `csmanager` not found | Build csStratware; add `dist\csmanager` to PATH |
-| UnrealPak / prepare fails | Confirm `assets/UnrealPak.zip` exists in csStratware; run `csmanager setup unrealpak` |
+| UnrealPak / prepare fails | Add `assets/UnrealPak.zip` or run `csmanager setup unrealpak --from <UE Engine>` |
 | Patch does nothing in game | Confirm output is `*_P.pak`, mount point matches crafting data, mod enabled in Icarus |
 | Wrong file patched | `pak find @icarus RequiredMillijoules` — asset file name must match `[PatchAsset(...)]` |
 | Want to inspect JSON | `csmanager pak ue extract <data.pak> extracted --filter *D_ProcessorRecipes*` |

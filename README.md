@@ -71,13 +71,13 @@ Copy [csstratware.json.example](csstratware.json.example) → `csstratware.json`
 
 | Key | Purpose |
 |-----|---------|
-| `unrealPak` / `unrealEngineDir` | Optional; default uses bundled `assets/UnrealPak.zip` |
+| `unrealPak` / `unrealEngineDir` | Optional; default uses local `assets/UnrealPak.zip` (see [assets/README.md](assets/README.md)) |
 | `icarusPaksDir`, `icarusDataPak` | Game paks (read/extract only) |
 | `icarusMountPoint` | UE virtual mount in packed mods (`../../../Icarus/...` — game convention) |
 
 **UnrealPak resolution** (first hit wins):
 
-1. `<repo>/assets/UnrealPak/` — auto-extract from zip on first pack
+1. `<repo>/assets/UnrealPak/` — auto-extract from `assets/UnrealPak.zip` on first pack (zip not in git)
 2. `<project>/tools/UnrealPak/Engine/` — `setup unrealpak --from …`
 3. `%LocalAppData%\csmanager\UnrealPak\Engine\` — `setup unrealpak --appdata`
 4. Legacy `C:\software\UnrealPak\` or Epic UE installs

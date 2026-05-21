@@ -10,9 +10,10 @@ dist/
 *.exe
 *.pdb
 
-## IDE
+## IDE / editor
 .vs/
 .idea/
+.cursor/
 *.swp
 *~
 
@@ -25,10 +26,28 @@ Thumbs.db
 .env
 secrets.json
 csstratware.json
+
+## Logs / debug scratch
+*.log
+debug-*.log
+
+## UnrealPak (extract locally; zip optional — not required in git)
 tools/UnrealPak/
 assets/UnrealPak/
+assets/*.zip
 
-## Test / coverage
+## Agent / Cursor local
+.agents/
+skills-lock.json
+
+## Icarus / UE inspect scratch (pulled JSON dumps)
+.tmp-*/
+.tmp-*
+
+## Accidental source dumps
+src/code.txt
+
+## Test / coverage output (keep tests/ source in git)
 TestResults/
 coverage/
 *.trx
@@ -41,10 +60,3 @@ packages/
 mods/**/work/
 mods/**/dist/
 mods/**/.cache/
-
-
-.agents
-.agents/**/
-
-.cursor/
-.cursor 
