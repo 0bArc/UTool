@@ -28,3 +28,4 @@ jobs:
           -X POST \
           -d "{\"content\":\"${MESSAGE//$'\n'/\\n}\"}" \
           $DISCORD_WEBHOOK
+          
