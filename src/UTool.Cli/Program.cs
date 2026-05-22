@@ -10,7 +10,7 @@ static void PrintUsage()
         including pak files, JSON data, CurveFloat assets, and player data.
 
         Usage:
-          utool list <mods-dir>              List discovered mods
+          utool discover <mods-dir>            Discover mods in <mods-dir>
           utool validate <mods-dir>          Validate mod manifests and layout
           utool compile <mod-dir> [--prepare]  Build mod C# patches (compile help)
           utool playerdata <subcommand>        Local UE4 saves (playerdata help)
@@ -47,7 +47,7 @@ var result = await loader.LoadAsync(modsDir);
 
 switch (command)
 {
-    case "list":
+    case "discover":
         foreach (var mod in result.Mods)
             Console.WriteLine($"{mod.Manifest.Id} {mod.Manifest.Version} — {mod.Manifest.Name}");
         break;
