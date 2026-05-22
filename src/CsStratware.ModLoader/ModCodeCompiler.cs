@@ -57,9 +57,19 @@ public static class ModCodeCompiler
 
         var args =
             $"build \"{csproj}\" -c {configuration} -o \"{outDir}\" --nologo -v:q /p:UseAppHost=false";
-        var exit = RunProcess("dotnet", args, Path.GetDirectoryName(csproj)!);
+        var projectDir = Path.GetDirectoryName(csproj)!;
+        var exit = RunProcess("dotnet", args, projectDir);
         if (exit != 0)
             throw new InvalidOperationException($"dotnet build failed (exit {exit}) for {csproj}");
+
+        foreach (var name in new[] { "bin", "obj" })
+        {
+            var stray = Path.Combine(projectDir, name);
+            if (Directory.Exists(stray))
+            {
+                try { Directory.Delete(stray, recursive: true); } catch { /* ignore */ }
+            }
+        }
 
         var assemblyName = Path.GetFileNameWithoutExtension(csproj);
         var dll = Path.Combine(outDir, $"{assemblyName}.dll");

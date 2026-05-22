@@ -292,7 +292,7 @@ public static class ModAssetPreparer
                 return StreamingFileOps.ReadTextAsync(cached).GetAwaiter().GetResult();
         }
 
-        if (!string.IsNullOrWhiteSpace(options.ExtractedDir))
+        if (!string.IsNullOrWhiteSpace(options.ExtractedDir) && Directory.Exists(options.ExtractedDir))
         {
             var index = AssetIndexCache.ForDirectory(options.ExtractedDir);
             index.GetOrBuild(cancellationToken: options.Operation?.CancellationToken ?? default);

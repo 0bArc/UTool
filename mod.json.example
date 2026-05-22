@@ -1,0 +1,18 @@
+{
+  "id": "noquarrites.testmod",
+  "name": "Test Mod",
+  "version": "0.1.0",
+  "description": "ICARUS creature table patches via csStratware.",
+  "author": "noquarrites",
+  "target": {
+    "gameId": "icarus",
+    "engineVersion": "4.27"
+  },
+  "contentRoots": ["content"],
+  "codeProject": "code/TestMod.csproj",
+  "pak": {
+    "output": "dist/TestMod_P.pak",
+    "mountPoint": "../../../",
+    "keepCache": true
+  }
+}

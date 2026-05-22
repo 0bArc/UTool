@@ -36,6 +36,8 @@ public sealed class ModPakSettings
     public string? CurveSourcePak { get; init; }
     public string? SourceFilter { get; init; }
     public bool UseUnrealPak { get; init; }
+    /// <summary>When true, retain .cache after build-mod (faster rebuilds). Default: remove .cache.</summary>
+    public bool KeepCache { get; init; }
 }
 
 public sealed class Ue4Target

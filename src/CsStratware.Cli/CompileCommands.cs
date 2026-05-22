@@ -53,7 +53,13 @@ internal static class CompileCommands
 
             var cfg = StratwareConfig.Load(modDir);
             var gameId = package.Manifest.Target?.GameId;
-            var sourcePak = cfg.ResolveSourcePak(package.Manifest.Pak?.SourcePak, gameId);
+            var sourcePakToken = package.Manifest.Pak?.SourcePak;
+            if (string.IsNullOrWhiteSpace(sourcePakToken)
+                && (ModCodeCompiler.HasCodeProject(package) || package.Manifest.PatchFiles.Count > 0))
+                sourcePakToken = "@data";
+            var sourcePak = string.IsNullOrWhiteSpace(sourcePakToken)
+                ? null
+                : cfg.ResolveSourcePak(sourcePakToken, gameId);
             var curveSource = package.Manifest.Pak?.CurveSourcePak ?? "@paks";
             var curveSourcePaks = cfg.ResolveSourcePakPaths(curveSource, gameId);
 
@@ -64,7 +70,7 @@ internal static class CompileCommands
                 CurveSourcePakPaths = curveSourcePaks,
                 PakAesKey = cfg.ResolvePakAesKey(gameId),
                 UnrealPakOptions = UnrealPakToolchain.ToOptions(toolchain, cfg.ResolvePakAesKey(gameId)),
-                ExtractedDir = cfg.ResolveExtractedDir(),
+                ExtractedDir = cfg.ResolveExistingExtractedDir(),
                 UnrealPakExecutable = toolchain.Executable,
                 CompiledAssemblyPath = result.AssemblyPath,
                 PlayerDataRoot = cfg.ResolvePlayerDataDir(gameId),

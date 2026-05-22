@@ -35,6 +35,9 @@ public sealed class AssetIndexCache
 
     public AssetIndexManifest GetOrBuild(bool forceRebuild = false, CancellationToken cancellationToken = default)
     {
+        if (!Directory.Exists(_rootDirectory))
+            return new AssetIndexManifest { RootDirectory = _rootDirectory };
+
         if (!forceRebuild && TryLoad(out var loaded) && loaded is not null)
             return loaded;
 

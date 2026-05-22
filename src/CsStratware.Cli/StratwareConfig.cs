@@ -165,6 +165,13 @@ public sealed class StratwareConfig
         return Path.GetFullPath(Path.Combine(ConfigDirectory, dir));
     }
 
+    /// <summary>Resolved extractedDir only when that directory already exists on disk.</summary>
+    public string? ResolveExistingExtractedDir()
+    {
+        var dir = ResolveExtractedDir();
+        return string.IsNullOrWhiteSpace(dir) || !Directory.Exists(dir) ? null : dir;
+    }
+
     public static bool IsDataPakAlias(string token) =>
         token.Equals("@data", StringComparison.OrdinalIgnoreCase)
         || token.Equals("@game-data", StringComparison.OrdinalIgnoreCase)

@@ -213,7 +213,12 @@ internal static class PakCommands
                 Console.WriteLine($"compiled: {compiledAssembly}");
             }
 
-            var sourcePak = cfg.ResolveSourcePak(package.Manifest.Pak?.SourcePak, gameId);
+            var sourcePakToken = package.Manifest.Pak?.SourcePak;
+            if (string.IsNullOrWhiteSpace(sourcePakToken) && (hasCode || package.Manifest.PatchFiles.Count > 0))
+                sourcePakToken = "@data";
+            var sourcePak = string.IsNullOrWhiteSpace(sourcePakToken)
+                ? null
+                : cfg.ResolveSourcePak(sourcePakToken, gameId);
             var curveSource = package.Manifest.Pak?.CurveSourcePak ?? "@paks";
             var curveSourcePaks = cfg.ResolveSourcePakPaths(curveSource, gameId);
 
@@ -225,7 +230,7 @@ internal static class PakCommands
                 CurveSourcePakPaths = curveSourcePaks,
                 PakAesKey = cfg.ResolvePakAesKey(gameId),
                 UnrealPakOptions = UnrealPakToolchain.ToOptions(toolchain, cfg.ResolvePakAesKey(gameId)),
-                ExtractedDir = cfg.ResolveExtractedDir(),
+                ExtractedDir = cfg.ResolveExistingExtractedDir(),
                 UnrealPakExecutable = toolchain.Executable,
                 CompiledAssemblyPath = compiledAssembly,
                 PlayerDataRoot = cfg.ResolvePlayerDataDir(package.Manifest.Target?.GameId),
@@ -236,6 +241,7 @@ internal static class PakCommands
             contentRoot = ModBuildContent.MergeForPack(package, prepared.PreparedContentDir);
             foreach (var file in prepared.PreparedFiles)
                 Console.WriteLine($"prepared: {file} ({new FileInfo(file).Length} bytes)");
+            ModCodePatchRunner.UnloadMod(package.Manifest.Id);
         }
         else
         {
@@ -259,12 +265,14 @@ internal static class PakCommands
             var ue = UnrealPakToolchain.ToOptions(cfg.ResolveUnrealPakToolchain());
             UnrealPakRunner.PackDirectory(contentRoot, output, mount, HasFlag(args, "-compress"), ue);
             Console.WriteLine($"Built mod pak (UnrealPak): {Path.GetFullPath(output)}");
+            ModBuildCleanup.AfterPack(modDir, package.Manifest.Pak?.KeepCache == true);
             return 0;
         }
 
         var options = new PakBuildOptions { MountPoint = mount };
         var result = ModPakBuilder.BuildModPak(package, output, options);
         Console.WriteLine($"Built mod pak: {result.OutputPath} ({result.FileCount} files, {result.TotalBytes} bytes)");
+        ModBuildCleanup.AfterPack(modDir, package.Manifest.Pak?.KeepCache == true);
         return 0;
     }
 

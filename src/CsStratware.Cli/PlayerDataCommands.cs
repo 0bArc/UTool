@@ -263,7 +263,7 @@ internal static class PlayerDataCommands
 
             SourcePakPath = sourcePak,
 
-            ExtractedDir = cfg.ResolveExtractedDir(),
+            ExtractedDir = cfg.ResolveExistingExtractedDir(),
 
             UnrealPakExecutable = toolchain.Executable,
 

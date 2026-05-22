@@ -61,6 +61,10 @@
         "mountPoint": {
           "type": "string",
           "description": "UE4 pak mount point (e.g. ../../../YourGame/)."
+        },
+        "keepCache": {
+          "type": "boolean",
+          "description": "When true, retain .cache after build-mod for faster rebuilds. Default false removes .cache."
         }
       },
       "additionalProperties": false
