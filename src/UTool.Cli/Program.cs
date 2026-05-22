@@ -11,12 +11,12 @@ static void PrintUsage()
 
         Usage:
           utool discover <mods-dir>            Discover mods in <mods-dir>
-          utool validate <mods-dir>          Validate mod manifests and layout
+          utool validate <mods-dir>            Validate mod manifests and layout
           utool compile <mod-dir> [--prepare]  Build mod C# patches (compile help)
           utool playerdata <subcommand>        Local UE4 saves (playerdata help)
-          utool pak <subcommand> [args...]   UE4 .pak tools (pak help)
-          utool setup <subcommand>           Install tools (setup help)
-          utool help                         Show this help
+          utool pak <subcommand> [args...]     UE4 .pak tools (pak help)
+          utool setup <subcommand>             Install tools (setup help)
+          utool help                           Show this help
         """);
 }
 
