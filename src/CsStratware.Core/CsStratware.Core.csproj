@@ -1,7 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <Description>Core types and contracts for the csStratware UE4 modding framework.</Description>
-    <IsPackable>true</IsPackable>
-    <PackageId>CsStratware.Core</PackageId>
-  </PropertyGroup>
-</Project>

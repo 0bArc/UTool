@@ -1,4 +1,4 @@
-# Build csmanager to dist\csmanager and bump <Version> in Directory.Build.props each run.
+# Build utool to dist\utool and bump <Version> in Directory.Build.props each run.
 param(
     [Alias("c")]
     [ValidateSet("Debug", "Release")]
@@ -12,12 +12,12 @@ $ErrorActionPreference = "Stop"
 function Find-RepoRoot {
     $dir = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
     for ($i = 0; $i -lt 12; $i++) {
-        if (Test-Path (Join-Path $dir "csStratware.sln")) { return $dir }
+        if (Test-Path (Join-Path $dir "utool.sln")) { return $dir }
         $parent = Split-Path $dir -Parent
         if (-not $parent -or $parent -eq $dir) { break }
         $dir = $parent
     }
-    throw "Could not find csStratware.sln (run from repo root)."
+    throw "Could not find utool.sln (run from repo root)."
 }
 
 function Bump-VersionInProps {
@@ -47,8 +47,8 @@ function Bump-VersionInProps {
 
 $root = Find-RepoRoot
 $props = Join-Path $root "Directory.Build.props"
-$dist = Join-Path $root "dist\csmanager"
-$exe = Join-Path $dist "csmanager.exe"
+$dist = Join-Path $root "dist\utool"
+$exe = Join-Path $dist "utool.exe"
 
 Push-Location $root
 try {

@@ -25,6 +25,7 @@ Thumbs.db
 *.local.json
 .env
 secrets.json
+utool.json
 csstratware.json
 
 ## Logs / debug scratch

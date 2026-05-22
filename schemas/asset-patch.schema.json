@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://csstratware.dev/schemas/asset-patch.schema.json",
+  "$id": "https://utool.dev/schemas/asset-patch.schema.json",
   "title": "UE4 Asset Patch",
   "type": "object",
   "required": ["patches"],

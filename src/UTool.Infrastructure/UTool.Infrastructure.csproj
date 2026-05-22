@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Cross-cutting infrastructure: caching, IO, logging, incremental builds, security hooks.</Description>
+    <RootNamespace>UTool.Infrastructure</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\UTool.Core\UTool.Core.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,9 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <Description>Cross-cutting infrastructure: caching, IO, logging, incremental builds, security hooks.</Description>
-    <RootNamespace>CsStratware.Infrastructure</RootNamespace>
-  </PropertyGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\CsStratware.Core\CsStratware.Core.csproj" />
-  </ItemGroup>
-</Project>

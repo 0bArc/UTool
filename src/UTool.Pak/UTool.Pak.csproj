@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>UE4 .pak read, build, and patch support for utool.</Description>
+    <RootNamespace>UTool.Pak</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\UTool.Core\UTool.Core.csproj" />
+    <ProjectReference Include="..\UTool.Infrastructure\UTool.Infrastructure.csproj" />
+    <ProjectReference Include="..\UTool.ModLoader\UTool.ModLoader.csproj" />
+  </ItemGroup>
+</Project>

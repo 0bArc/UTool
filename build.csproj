@@ -4,8 +4,8 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <RootNamespace>CsStratwareBuild</RootNamespace>
-    <AssemblyName>csstratware-build</AssemblyName>
+    <RootNamespace>UToolBuild</RootNamespace>
+    <AssemblyName>utool-build</AssemblyName>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
   <ItemGroup>

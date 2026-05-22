@@ -2,7 +2,7 @@
   "id": "noquarrites.testmod",
   "name": "Test Mod",
   "version": "0.1.0",
-  "description": "ICARUS creature table patches via csStratware.",
+  "description": "ICARUS creature table patches via utool.",
   "author": "noquarrites",
   "target": {
     "gameId": "icarus",

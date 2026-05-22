@@ -5,6 +5,6 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\..\src\CsStratware.Sdk\CsStratware.Sdk.csproj" />
+    <ProjectReference Include="..\..\..\src\UTool.Sdk\UTool.Sdk.csproj" />
   </ItemGroup>
 </Project>

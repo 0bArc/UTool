@@ -1,4 +1,4 @@
-using CsStratware.Sdk;
+using UTool.Sdk;
 
 /// <summary>Example code patch — wire asset path to your exported JSON file name.</summary>
 [PatchAsset("ExampleGameplay.json")]

@@ -2,8 +2,8 @@
   "id": "example.mod",
   "name": "Example Mod",
   "version": "0.1.0",
-  "description": "Starter mod package for csStratware.",
-  "author": "csStratware",
+  "description": "Starter mod package for utool.",
+  "author": "utool",
   "target": {
     "gameId": "your-game",
     "engineVersion": "4.27",

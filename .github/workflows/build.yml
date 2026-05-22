@@ -15,8 +15,8 @@ jobs:
         with:
           dotnet-version: "8.0.x"
       - name: Build solution
-        run: dotnet build csStratware.sln -c Release --nologo
-      - name: Publish csmanager
+        run: dotnet build utool.sln -c Release --nologo
+      - name: Publish utool
         run: dotnet run --project build.csproj -c Release
       - name: Smoke test CLI
-        run: dist\csmanager\csmanager.exe help
+        run: dist\utool\utool.exe help

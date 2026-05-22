@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://csstratware.dev/schemas/mod.schema.json",
-  "title": "csStratware Mod Manifest",
+  "$id": "https://utool.dev/schemas/mod.schema.json",
+  "title": "utool Mod Manifest",
   "type": "object",
   "required": ["id", "name", "version"],
   "properties": {

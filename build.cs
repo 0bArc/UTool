@@ -1,9 +1,9 @@
 using System.Diagnostics;
 
 var root = FindRepoRoot();
-var sln = Path.Combine(root, "csStratware.sln");
-var cli = Path.Combine(root, "src", "CsStratware.Cli", "CsStratware.Cli.csproj");
-var dist = Path.Combine(root, "dist", "csmanager");
+var sln = Path.Combine(root, "utool.sln");
+var cli = Path.Combine(root, "src", "UTool.Cli", "UTool.Cli.csproj");
+var dist = Path.Combine(root, "dist", "utool");
 var configuration = ArgsValue("--configuration", "-c") ?? "Release";
 
 Console.WriteLine($"repo: {root}");
@@ -13,7 +13,7 @@ Run("dotnet", $"build \"{sln}\" -c {configuration} --nologo -v m");
 Directory.CreateDirectory(dist);
 Run("dotnet", $"publish \"{cli}\" -c {configuration} -o \"{dist}\" --nologo -v m");
 
-var exe = Path.Combine(dist, OperatingSystem.IsWindows() ? "csmanager.exe" : "csmanager");
+var exe = Path.Combine(dist, OperatingSystem.IsWindows() ? "utool.exe" : "utool");
 Console.WriteLine();
 Console.WriteLine($"OK: {exe}");
 Console.WriteLine($"PATH: add \"{dist}\"");
@@ -25,7 +25,7 @@ static string FindRepoRoot()
         var dir = start;
         for (var i = 0; i < 12; i++)
         {
-            if (File.Exists(Path.Combine(dir, "csStratware.sln")))
+            if (File.Exists(Path.Combine(dir, "utool.sln")))
                 return dir;
             var parent = Directory.GetParent(dir);
             if (parent is null)
@@ -34,7 +34,7 @@ static string FindRepoRoot()
         }
     }
 
-    throw new InvalidOperationException("Could not find csStratware.sln (run from repo root).");
+    throw new InvalidOperationException("Could not find utool.sln (run from repo root).");
 }
 
 static string? ArgsValue(params string[] flags)

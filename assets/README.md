@@ -3,8 +3,8 @@
 Place **`UnrealPak.zip`** here, or run:
 
 ```powershell
-csmanager setup unrealpak
-csmanager setup unrealpak --from "C:\Program Files\Epic Games\UE_5.4"
+utool setup unrealpak
+utool setup unrealpak --from "C:\Program Files\Epic Games\UE_5.4"
 ```
 
 First use extracts to **`UnrealPak/`** (gitignored).
