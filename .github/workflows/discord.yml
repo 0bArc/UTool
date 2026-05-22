@@ -10,22 +10,51 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Send commit to Discord
+      - name: Send Discord Webhook
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+
         run: |
-          MESSAGE="New push to ${{ github.repository_owner }}/{{ github.repository }}
-
-          Author: ${{ github.actor }}
-
-          Commit:
-          ${{ github.event.head_commit.message }}
-
-          URL:
-          ${{ github.event.head_commit.url }}"
+          REPO="${{ github.repository }}"
+          AUTHOR="${{ github.actor }}"
+          COMMIT="${{ github.event.head_commit.message }}"
+          URL="${{ github.event.head_commit.url }}"
+          SHA="${{ github.sha }}"
 
           curl -H "Content-Type: application/json" \
           -X POST \
-          -d "{\"content\":\"${MESSAGE//$'\n'/\\n}\"}" \
+          -d "{
+            \"username\": \"GitHub\",
+            \"avatar_url\": \"https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png\",
+            \"embeds\": [{
+              \"title\": \"Repository Update\",
+              \"url\": \"${URL}\",
+              \"color\": 16777215,
+              \"fields\": [
+                {
+                  \"name\": \"Repository\",
+                  \"value\": \"${REPO}\",
+                  \"inline\": true
+                },
+                {
+                  \"name\": \"Author\",
+                  \"value\": \"${AUTHOR}\",
+                  \"inline\": true
+                },
+                {
+                  \"name\": \"Commit\",
+                  \"value\": \"${COMMIT}\"
+                },
+                {
+                  \"name\": \"Commit SHA\",
+                  \"value\": \"\`${SHA:0:7}\`\",
+                  \"inline\": true
+                }
+              ],
+              \"footer\": {
+                \"text\": \"GitHub Actions\"
+              },
+              \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
+            }]
+          }" \
           $DISCORD_WEBHOOK
-          
