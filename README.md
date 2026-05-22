@@ -4,6 +4,7 @@
 [![build](https://img.shields.io/github/actions/workflow/status/0bArc/utool/build.yml?label=build)](https://github.com/0bArc/utool/actions/workflows/build.yml)
 [![platform](https://img.shields.io/badge/platform-Windows-0078D4?logo=windows&logoColor=white)](https://github.com/0bArc/utool)
 [![UE](https://img.shields.io/badge/engine-UE4%20%7C%20UE5-333333)](https://github.com/0bArc/utool)
+[![license](https://img.shields.io/github/license/0bArc/utool)](LICENSE)
 
 **UTool** — modding toolkit for extracting, patching, rebuilding, and packaging UE4/UE5 game assets, including pak files, JSON data, CurveFloat assets, and player data.
 
@@ -85,3 +86,9 @@ Env: `UTOOL_UNREALPAK` (exe path), `UTOOL_ROOT` (repo root if auto-detect fails)
 - [src/README.md](src/README.md) — SDK, compile/pak flow, command reference
 - [docs/setup.md](docs/setup.md) — game mod walkthrough from scratch
 - [docs/UTOOL-WORKSPACE-GUIDE.md](docs/UTOOL-WORKSPACE-GUIDE.md) — Icarus workspace mods (250cap, noquarrites)
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
+
+Third-party components and legal obligations (including **UAssetAPI** and **UnrealPak** / Epic’s Unreal Engine EULA) are documented in [NOTICES.md](NOTICES.md). You must supply your own Unreal Engine toolchain for UnrealPak; engine binaries are not redistributed as part of this repository.

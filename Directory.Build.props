@@ -8,6 +8,7 @@
     <Authors>UTool</Authors>
     <Company>UTool</Company>
     <Product>UTool</Product>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <Version>0.1.11</Version>
     <RootNamespace>UTool</RootNamespace>
   </PropertyGroup>

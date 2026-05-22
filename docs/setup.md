@@ -50,7 +50,7 @@ Edit `utool.json` — at minimum set:
 
 - `dataPak` or `games.Icarus.dataPak` — path to `Icarus/Content/Data/data.pak` (legacy key `icarusDataPak` still works; see [utool.json.example](../utool.json.example))
 
-UnrealPak: put **`assets/UnrealPak.zip`** in this repo, or point at an Epic UE install. First pack extracts to `assets/UnrealPak/`. Optional:
+UnrealPak: put **`assets/UnrealPak.zip`** in this repo, or point at an Epic UE install. First pack extracts to `assets/UnrealPak/`. Epic’s [Unreal Engine EULA](https://www.unrealengine.com/en-US/eula/unreal) applies to engine binaries; see [NOTICES.md](../NOTICES.md). Optional:
 
 ```powershell
 utool setup unrealpak
