@@ -12,6 +12,7 @@
   "dependencies": [],
   "contentRoots": ["content"],
   "patchFiles": ["patches/gameplay.json"],
+  "codeProject": "code/ExampleMod.csproj",
   "pak": {
     "output": "dist/ExampleMod_P.pak",
     "mountPoint": "../../../your-game/"

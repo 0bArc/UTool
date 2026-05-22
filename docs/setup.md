@@ -12,7 +12,7 @@ In Icarus, that field is the “energy cost” on bio processor recipes (stored 
 |-------|-----|
 | **.NET 8 SDK** | Builds `utool` and your mod’s small C# patch DLL |
 | **Icarus (Steam)** | Game files; `data.pak` is the recipe source |
-| **UnrealPak** | Local `assets/UnrealPak.zip` or `setup unrealpak --from` — see [assets/README.md](assets/README.md) |
+| **UnrealPak** | Local `assets/UnrealPak.zip` or `setup unrealpak --from` — see [assets/README.md](../assets/README.md) |
 | **This repo built** | Gives you the `utool` CLI |
 
 Optional but easiest: use the sibling demo workspace **[utoolDemo](../utoolDemo)** — it already contains a working `mods/processor-850` mod.
@@ -48,7 +48,7 @@ copy utool.json.example utool.json
 
 Edit `utool.json` — at minimum set:
 
-- `icarusDataPak` — path to `Icarus/Content/Data/data.pak` (see [utool.json.example](utool.json.example))
+- `dataPak` or `games.Icarus.dataPak` — path to `Icarus/Content/Data/data.pak` (legacy key `icarusDataPak` still works; see [utool.json.example](../utool.json.example))
 
 UnrealPak: put **`assets/UnrealPak.zip`** in this repo, or point at an Epic UE install. First pack extracts to `assets/UnrealPak/`. Optional:
 
@@ -226,5 +226,6 @@ You change **one property name** everywhere in that JSON tree. The tool ships th
 
 - Working sample: [utoolDemo/mods/processor-850](../utoolDemo/mods/processor-850)
 - In-repo toy sample (no game): [mods/example-mod/](mods/example-mod/)
-- CLI & architecture: [src/README.md](src/README.md)
-- Root overview: [README.md](README.md)
+- CLI & architecture: [src/README.md](../src/README.md)
+- Root overview: [README.md](../README.md)
+- Icarus multi-mod workspace: [UTOOL-WORKSPACE-GUIDE.md](UTOOL-WORKSPACE-GUIDE.md)

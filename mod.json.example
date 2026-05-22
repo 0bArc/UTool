@@ -1,18 +1,21 @@
 {
-  "id": "noquarrites.testmod",
-  "name": "Test Mod",
+  "id": "example.mod",
+  "name": "Example Mod",
   "version": "0.1.0",
-  "description": "ICARUS creature table patches via utool.",
-  "author": "noquarrites",
+  "description": "Starter mod manifest for utool (see mods/example-mod/).",
+  "author": "you",
   "target": {
-    "gameId": "icarus",
-    "engineVersion": "4.27"
+    "gameId": "Icarus",
+    "engineVersion": "4.27",
+    "minGameVersion": "1.0.0"
   },
   "contentRoots": ["content"],
-  "codeProject": "code/TestMod.csproj",
+  "patchFiles": ["patches/gameplay.json"],
+  "codeProject": "code/ExampleMod.csproj",
   "pak": {
-    "output": "dist/TestMod_P.pak",
-    "mountPoint": "../../../",
-    "keepCache": true
+    "output": "dist/ExampleMod_P.pak",
+    "mountPoint": "../../../Icarus/Content/data/",
+    "sourcePak": "@icarus-data",
+    "useUnrealPak": true
   }
 }

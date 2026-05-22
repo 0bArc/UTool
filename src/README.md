@@ -63,7 +63,8 @@ Tests: `dotnet test tests/UTool.Tests -c Release`
 Reference from your mod `.csproj`:
 
 ```xml
-<ProjectReference Include="..\..\..\utool\src\UTool.Sdk\UTool.Sdk.csproj" />
+<!-- adjust ..\ segments to reach your utool clone -->
+<ProjectReference Include="..\..\..\src\UTool.Sdk\UTool.Sdk.csproj" />
 ```
 
 ```csharp
@@ -158,7 +159,7 @@ utool list|validate <mods-dir>
 utool compile <mod-dir> [--prepare] [--force-extract]
 utool pak find <dir|@icarus> <needle> [--path-only] [--grep] [--aes-key <hex>] [--progress] [-v]
 utool pak build-mod <mod-dir> [-o out.pak] [--force-extract] [--progress] [-v]
-utool pak list|extract|grep|ue extract|pack ...
+utool pak list|extract|grep|data list|data pull|ue extract|ue pack ...
 ```
 
 | Flag | Effect |
@@ -169,7 +170,7 @@ utool pak list|extract|grep|ue extract|pack ...
 | `--grep` | `pak find` also searches entry bytes (path search is default) |
 | `--force-extract` | Ignore incremental + extraction caches |
 
-Game paths: workspace `utool.json` (demo) or env; Icarus shortcuts `@icarus`, `@icarus-data`.
+Game paths: workspace `utool.json` (legacy `csstratware.json` still read). Aliases: `@data`, `@icarus-data`, `@paks`, `@icarus` (see `UToolConfig`).
 
 ### UnrealPak setup
 
@@ -179,4 +180,4 @@ Bundled **`assets/UnrealPak.zip`** → **`assets/UnrealPak/`** on first use:
 utool setup unrealpak
 ```
 
-Also `tools/UnrealPak/`, `%LocalAppData%\utool\UnrealPak\`, legacy `C:\software\UnrealPak`. See root [README](../README.md#unrealpak-icarus-_p_pak-mods).
+Also `tools/UnrealPak/`, `%LocalAppData%\utool\UnrealPak\`, legacy `C:\software\UnrealPak`. See root [README](../README.md#config).

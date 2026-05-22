@@ -63,7 +63,7 @@ Details: [src/README.md](src/README.md).
 
 ## Config
 
-Copy [utool.json.example](utool.json.example) → `utool.json` (gitignored). Legacy `csstratware.json` is still read if present.
+Copy [utool.json.example](utool.json.example) → `utool.json` (gitignored). Legacy `csstratware.json` is still read if present. Mod layout: [mod.json.example](mod.json.example) and [mods/example-mod/](mods/example-mod/).
 
 | Key | Purpose |
 |-----|---------|
@@ -83,4 +83,5 @@ Env: `UTOOL_UNREALPAK` (exe path), `UTOOL_ROOT` (repo root if auto-detect fails)
 ## Docs
 
 - [src/README.md](src/README.md) — SDK, compile/pak flow, command reference
-- [setup.md](setup.md) — game mod walkthrough from scratch
+- [docs/setup.md](docs/setup.md) — game mod walkthrough from scratch
+- [docs/UTOOL-WORKSPACE-GUIDE.md](docs/UTOOL-WORKSPACE-GUIDE.md) — Icarus workspace mods (250cap, noquarrites)
