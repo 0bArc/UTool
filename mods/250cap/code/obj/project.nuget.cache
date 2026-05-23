@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "dgSpecHash": "8zGbsAXmAtM=",
+  "success": true,
+  "projectFilePath": "F:\\Data\\personal\\c#\\modding\\ICARUS\\morelevels\\mods\\250cap\\code\\Level250Cap.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\sandk\\.nuget\\packages\\microsoft.netcore.app.ref\\8.0.25\\microsoft.netcore.app.ref.8.0.25.nupkg.sha512",
+    "C:\\Users\\sandk\\.nuget\\packages\\microsoft.windowsdesktop.app.ref\\8.0.25\\microsoft.windowsdesktop.app.ref.8.0.25.nupkg.sha512",
+    "C:\\Users\\sandk\\.nuget\\packages\\microsoft.aspnetcore.app.ref\\8.0.25\\microsoft.aspnetcore.app.ref.8.0.25.nupkg.sha512"
+  ],
+  "logs": []
+}

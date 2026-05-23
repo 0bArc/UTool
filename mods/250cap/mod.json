@@ -1,0 +1,21 @@
+{
+  "id": "icarus.level250cap",
+  "name": "Level 250 Cap",
+  "version": "1.0.0",
+  "description": "Raises player level cap to 250 and extends XP/talent CurveFloat assets.",
+  "author": "csStratware",
+  "target": {
+    "gameId": "Icarus",
+    "engineVersion": "4.27",
+    "minGameVersion": "1.0.0"
+  },
+  "contentRoots": [],
+  "codeProject": "code/Level250Cap.csproj",
+  "pak": {
+    "output": "dist/level250cap_P.pak",
+    "mountPoint": "../../../Icarus/Content/Data/Character/",
+    "sourcePak": "@data",
+    "curveSourcePak": "@paks",
+    "useUnrealPak": true
+  }
+}

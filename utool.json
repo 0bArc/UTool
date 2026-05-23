@@ -1,0 +1,9 @@
+{
+  "games": {
+    "Icarus": {
+      "paksDir": "D:\\SteamLibrary\\steamapps\\common\\Icarus\\Icarus\\Content\\Paks",
+      "dataPak": "D:\\SteamLibrary\\steamapps\\common\\Icarus\\Icarus\\Content\\Data\\data.pak"
+    }
+  },
+  "extractedDir": "extracted"
+}
