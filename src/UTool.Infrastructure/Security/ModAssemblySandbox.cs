@@ -8,10 +8,16 @@ public sealed class ModAssemblySandbox : IDisposable
     private readonly AssemblyLoadContext _context;
     private bool _disposed;
 
-    public ModAssemblySandbox(string modId, string? allowedSdkVersion = null)
+    private readonly IReadOnlyDictionary<string, string> _hostAssemblyPaths;
+
+    public ModAssemblySandbox(
+        string modId,
+        string? allowedSdkVersion = null,
+        IReadOnlyDictionary<string, string>? hostAssemblyPaths = null)
     {
         ModId = modId;
         AllowedSdkVersion = allowedSdkVersion;
+        _hostAssemblyPaths = hostAssemblyPaths ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         _context = new AssemblyLoadContext($"utool-sandbox-{modId}", isCollectible: true);
         _context.Resolving += OnResolving;
     }
@@ -48,6 +54,11 @@ public sealed class ModAssemblySandbox : IDisposable
     {
         if (IsBlockedAssembly(name.Name))
             throw new InvalidOperationException($"Blocked assembly load from mod '{ModId}': {name.Name}");
+
+        if (name.Name is not null
+            && _hostAssemblyPaths.TryGetValue(name.Name, out var hostPath)
+            && File.Exists(hostPath))
+            return context.LoadFromAssemblyPath(hostPath);
 
         var loadDir = LoadedAssembly is null
             ? null

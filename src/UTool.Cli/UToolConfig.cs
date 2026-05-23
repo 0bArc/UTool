@@ -16,6 +16,7 @@ public sealed class GameSettings
     [JsonPropertyName("playerDataDir")]
     public string? PlayerDataDir { get; init; }
 
+    /// <summary>Legacy per-game default mount. Prefer <c>mod.json</c> <c>pak.mountPoint</c>.</summary>
     [JsonPropertyName("mountPoint")]
     public string? MountPoint { get; init; }
 

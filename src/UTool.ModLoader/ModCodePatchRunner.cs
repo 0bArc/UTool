@@ -1,7 +1,10 @@
 using System.Reflection;
+using UTool.Core.Models;
 using UTool.Infrastructure.Security;
 using UTool.Sdk;
+using UTool.ModLoader.Curves;
 using SdkAssetPatch = UTool.Sdk.AssetPatch;
+using SdkCurvePatch = UTool.Sdk.CurvePatch;
 using SdkPlayerDataPatch = UTool.Sdk.PlayerDataPatch;
 
 namespace UTool.ModLoader;
@@ -21,15 +24,49 @@ public static class ModCodePatchRunner
         new()
         {
             AssetPatches = LoadAssetPatches(assemblyPath, modId),
+            CurvePatches = LoadCurvePatches(assemblyPath, modId),
             PlayerDataPatches = LoadPlayerDataPatches(assemblyPath, modId),
         };
+
+    public static IReadOnlyList<CodeCurvePatch> LoadCurvePatches(string assemblyPath, string? modId = null)
+    {
+        EnsureCurvePatchApi();
+        var assembly = LoadAssembly(assemblyPath, modId);
+        var patches = new List<CodeCurvePatch>();
+
+        foreach (var type in EnumerateLoadableTypes(assembly))
+        {
+            var attrs = type.GetCustomAttributes<PatchCurveAttribute>(inherit: false).ToList();
+            if (attrs.Count == 0)
+                continue;
+
+            if (type.IsAbstract)
+                continue;
+
+            var instance = (SdkCurvePatch?)Activator.CreateInstance(type)
+                ?? throw new InvalidOperationException($"Could not create patch type {type.FullName}");
+
+            foreach (var attr in attrs)
+            {
+                patches.Add(new CodeCurvePatch
+                {
+                    AssetName = attr.AssetName,
+                    RelativeDirectory = attr.RelativeDirectory,
+                    ExtendFromVanilla = attr.ExtendFromVanilla,
+                    Instance = instance,
+                });
+            }
+        }
+
+        return patches;
+    }
 
     public static IReadOnlyList<CodeAssetPatch> LoadAssetPatches(string assemblyPath, string? modId = null)
     {
         var assembly = LoadAssembly(assemblyPath, modId);
         var patches = new List<CodeAssetPatch>();
 
-        foreach (var type in assembly.GetTypes())
+        foreach (var type in EnumerateLoadableTypes(assembly))
         {
             if (type.IsAbstract || !typeof(SdkAssetPatch).IsAssignableFrom(type))
                 continue;
@@ -57,7 +94,7 @@ public static class ModCodePatchRunner
         var assembly = LoadAssembly(assemblyPath, modId);
         var patches = new List<CodePlayerDataPatch>();
 
-        foreach (var type in assembly.GetTypes())
+        foreach (var type in EnumerateLoadableTypes(assembly))
         {
             if (type.IsAbstract || !typeof(SdkPlayerDataPatch).IsAssignableFrom(type))
                 continue;
@@ -89,9 +126,53 @@ public static class ModCodePatchRunner
             ActiveSandboxes.Remove(modId);
         }
 
-        var sandbox = new ModAssemblySandbox(modId, typeof(SdkAssetPatch).Assembly.GetName().Version?.ToString());
+        var sandbox = new ModAssemblySandbox(
+            modId,
+            typeof(SdkAssetPatch).Assembly.GetName().Version?.ToString(),
+            CreateHostAssemblyMap());
         ActiveSandboxes[modId] = sandbox;
         return sandbox.Load(assemblyPath);
+    }
+
+    private static IReadOnlyDictionary<string, string> CreateHostAssemblyMap()
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var asm in new[] { typeof(SdkAssetPatch).Assembly, typeof(ModPackage).Assembly })
+        {
+            var path = asm.Location;
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+                continue;
+
+            map[asm.GetName().Name ?? Path.GetFileNameWithoutExtension(path)] = path;
+        }
+
+        return map;
+    }
+
+    private static void EnsureCurvePatchApi()
+    {
+        _ = typeof(SdkCurvePatch);
+    }
+
+    private static IEnumerable<Type> EnumerateLoadableTypes(Assembly assembly)
+    {
+        try
+        {
+            return assembly.GetTypes();
+        }
+        catch (ReflectionTypeLoadException ex)
+        {
+            var loaderDetails = string.Join(
+                Environment.NewLine,
+                ex.LoaderExceptions.Where(e => e is not null).Select(e => e!.Message));
+
+            throw new InvalidOperationException(
+                "Mod assembly type load failed. Rebuild the mod after updating utool " +
+                $"(host UTool.Sdk {typeof(SdkAssetPatch).Assembly.GetName().Version}). " +
+                "If you use a global dotnet tool, run: dotnet tool update -g utool" +
+                (string.IsNullOrWhiteSpace(loaderDetails) ? "" : Environment.NewLine + loaderDetails),
+                ex);
+        }
     }
 
     public static void UnloadMod(string modId)

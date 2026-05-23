@@ -188,4 +188,31 @@ public sealed class JsonAssetEditorTests
         Assert.Contains("Juvenile_Ape", json);
         Assert.Contains("NPC.JuvenileApe", json);
     }
+
+    [Fact]
+    public void Rows_WhereNameIn_Scale_multiplies_matched_row_property()
+    {
+        const string json = """
+            {
+              "Defaults": { "TameDurationInSeconds": 300 },
+              "Rows": [
+                { "Name": "Horse", "TameDurationInSeconds": 900 },
+                { "Name": "Moa", "TameDurationInSeconds": 90000 },
+                { "Name": "Other", "TameDurationInSeconds": 100 }
+              ]
+            }
+            """;
+
+        var editor = new JsonAssetEditor(json);
+        var updated = editor.Rows("/Rows")
+            .WhereNameIn("Moa", "Buffalo", "Horse", "Tusker")
+            .Scale("TameDurationInSeconds", 0.5);
+
+        var outJson = editor.ToJson();
+        Assert.Equal(2, updated);
+        Assert.Contains("\"TameDurationInSeconds\": 450", outJson);
+        Assert.Contains("\"TameDurationInSeconds\": 45000", outJson);
+        Assert.Contains("\"TameDurationInSeconds\": 100", outJson);
+        Assert.Contains("\"TameDurationInSeconds\": 300", outJson);
+    }
 }

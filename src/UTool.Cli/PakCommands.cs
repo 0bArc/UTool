@@ -1,5 +1,7 @@
+using System.Reflection;
 using System.Text;
 using UTool.Core.Models;
+using UTool.Sdk;
 using UTool.Infrastructure.Logging;
 using UTool.Infrastructure.Operations;
 using UTool.ModLoader;
@@ -157,6 +159,8 @@ internal static class PakCommands
         if (args.Length < 2)
             return Missing("build-mod <mod-dir>");
 
+        EnsureHostSupportsCurvePatches();
+
         var modDir = args[1];
         var manifestPath = Path.Combine(modDir, ModManifestReader.ManifestFileName);
         if (!File.Exists(manifestPath))
@@ -194,9 +198,12 @@ internal static class PakCommands
             || package.Manifest.Pak?.UseUnrealPak == true
             || !string.IsNullOrWhiteSpace(package.Manifest.Pak?.SourcePak);
 
+        ModCodeProjectScaffold.EnsureProject(package);
         var hasCode = ModCodeCompiler.HasCodeProject(package);
-        var hasCurves = Directory.Exists(Path.Combine(modDir, package.Manifest.CurvePatchesDir ?? "curves"))
-            && Directory.EnumerateFiles(Path.Combine(modDir, package.Manifest.CurvePatchesDir ?? "curves"), "*.curve.json").Any();
+        var curvesDir = Path.Combine(modDir, package.Manifest.CurvePatchesDir ?? "curves");
+        var hasJsonCurves = Directory.Exists(curvesDir)
+            && Directory.EnumerateFiles(curvesDir, "*.curve.json").Any();
+        var hasCurves = hasJsonCurves || hasCode;
         var shouldPrepare = HasFlag(args, "--prepare")
             || package.Manifest.PatchFiles.Count > 0
             || hasCode
@@ -884,5 +891,16 @@ internal static class PakCommands
             : null;
 
         return new OperationContext { Progress = progress };
+    }
+
+    private static void EnsureHostSupportsCurvePatches()
+    {
+        if (Type.GetType("UTool.Sdk.CurvePatch, UTool.Sdk") is not null)
+            return;
+
+        var host = Assembly.GetExecutingAssembly().GetName();
+        throw new InvalidOperationException(
+            $"utool {host.Version} is missing CurvePatch API. Rebuild the CLI from csStratware " +
+            "(run: dotnet run build.cs) and ensure PATH points at dist/utool, not an older install.");
     }
 }

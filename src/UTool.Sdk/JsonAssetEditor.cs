@@ -243,6 +243,26 @@ public sealed class JsonAssetEditor
 
     public string ToJson() => _root.ToJsonString(UToolJson.Options);
 
+    /// <summary>Target a DataTable-style <paramref name="arrayPointer"/> (e.g. <c>/Rows</c>).</summary>
+    public JsonDataTableRows Rows(string arrayPointer, string nameProperty = "Name") =>
+        new(this, arrayPointer, nameProperty);
+
+    internal IEnumerable<JsonObject> EnumerateArrayObjects(string arrayPointer)
+    {
+        var arr = ResolveArray(arrayPointer);
+        for (var i = 0; i < arr.Count; i++)
+        {
+            if (arr[i] is JsonObject obj)
+                yield return obj;
+        }
+    }
+
+    internal void SetOnRow(JsonObject row, string propertyPointer, object? value)
+    {
+        var pointer = NormalizeRelativePointer(propertyPointer);
+        SetAtPointer(row, pointer, JsonNodeConversion.ToNode(value), replace: true, createMissing: true);
+    }
+
     private static void Walk(JsonNode? node, Action<JsonNode> visit)
     {
         if (node is null)

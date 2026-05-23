@@ -1,11 +1,15 @@
+using UTool.ModLoader.Curves;
+
 namespace UTool.ModLoader;
 
 public sealed class ModPatchBundle
 {
     public IReadOnlyList<CodeAssetPatch> AssetPatches { get; init; } = [];
+    public IReadOnlyList<CodeCurvePatch> CurvePatches { get; init; } = [];
     public IReadOnlyList<CodePlayerDataPatch> PlayerDataPatches { get; init; } = [];
 
-    public bool HasWork => AssetPatches.Count > 0 || PlayerDataPatches.Count > 0;
+    public bool HasWork =>
+        AssetPatches.Count > 0 || CurvePatches.Count > 0 || PlayerDataPatches.Count > 0;
 }
 
 public sealed class CodePlayerDataPatch

@@ -30,9 +30,10 @@ internal static class CompileCommands
             return 1;
         }
 
+        ModCodeProjectScaffold.EnsureProject(package);
         if (!ModCodeCompiler.HasCodeProject(package))
         {
-            Console.Error.WriteLine($"No code project. Add {ModCodeCompiler.DefaultCodeDirName}/*.csproj or mod.json codeProject.");
+            Console.Error.WriteLine($"No code project. Add {ModCodeCompiler.DefaultCodeDirName}/*.csproj, *.cs, or mod.json codeProject.");
             return 1;
         }
 
@@ -45,6 +46,8 @@ internal static class CompileCommands
             var bundle = ModCodePatchRunner.LoadFromAssembly(result.AssemblyPath);
             foreach (var patch in bundle.AssetPatches)
                 Console.WriteLine($"  asset: {patch.AssetFileName} ({patch.PatchType.Name})");
+            foreach (var patch in bundle.CurvePatches)
+                Console.WriteLine($"  curve: {patch.AssetName} ({patch.Instance.GetType().Name})");
             foreach (var patch in bundle.PlayerDataPatches)
                 Console.WriteLine($"  playerdata: {patch.RelativePath} ({patch.PatchType.Name})");
 

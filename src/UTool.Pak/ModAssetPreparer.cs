@@ -60,7 +60,8 @@ public static class ModAssetPreparer
             .Where(path => AssetShouldPrepare(path, jsonPatchesByAsset, codePatches, saves))
             .ToList();
 
-        var hasCurvePatches = HasCurvePatches(mod);
+        var curvePatches = LoadCodeCurvePatches(mod, options);
+        var hasCurvePatches = HasJsonCurvePatches(mod) || curvePatches.Count > 0;
         if (assetPaths.Count == 0 && !hasCurvePatches)
         {
             var reason = codePatches.Count > 0 && saves is not null
@@ -119,7 +120,8 @@ public static class ModAssetPreparer
                     AesKey = options.PakAesKey,
                     UnrealPakOptions = options.UnrealPakOptions,
                     ForceRefresh = options.ForceExtract,
-                });
+                },
+                curvePatches);
             preparedFiles.AddRange(curveFiles);
         }
 
@@ -132,11 +134,25 @@ public static class ModAssetPreparer
         };
     }
 
-    private static bool HasCurvePatches(ModPackage mod)
+    private static bool HasJsonCurvePatches(ModPackage mod)
     {
         var dir = Path.Combine(mod.RootPath, mod.Manifest.CurvePatchesDir ?? "curves");
         return Directory.Exists(dir)
             && Directory.EnumerateFiles(dir, "*.curve.json", SearchOption.TopDirectoryOnly).Any();
+    }
+
+    private static IReadOnlyList<CodeCurvePatch> LoadCodeCurvePatches(ModPackage mod, ModPrepareOptions options)
+    {
+        var assembly = options.CompiledAssemblyPath;
+        if (string.IsNullOrWhiteSpace(assembly))
+        {
+            if (!ModCodeCompiler.HasCodeProject(mod))
+                return [];
+
+            assembly = ModCodeCompiler.Compile(mod).AssemblyPath;
+        }
+
+        return ModCodePatchRunner.LoadCurvePatches(assembly, mod.Manifest.Id);
     }
 
     private static string PrepareOneAsset(

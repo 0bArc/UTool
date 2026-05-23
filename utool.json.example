@@ -9,12 +9,10 @@
     "Icarus": {
       "paksDir": "D:\\SteamLibrary\\steamapps\\common\\Icarus\\Icarus\\Content\\Paks",
       "dataPak": "D:\\SteamLibrary\\steamapps\\common\\Icarus\\Icarus\\Content\\Data\\data.pak",
-      "playerDataDir": "C:\\Users\\you\\AppData\\Local\\Icarus\\Saved\\PlayerData",
-      "mountPoint": "../../../Icarus/Content/data/AI/"
+      "playerDataDir": "C:\\Users\\you\\AppData\\Local\\Icarus\\Saved\\PlayerData"
     },
     "PacificDrive": {
       "paksDir": "D:\\Games\\Pacific Drive\\PenDriverPro\\Content\\Paks",
-      "mountPoint": "../../../PenDriverPro/",
       "pakAesKey": "BASE64_OR_64_CHAR_HEX_AES_256_KEY"
     }
   }

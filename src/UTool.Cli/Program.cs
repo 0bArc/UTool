@@ -1,3 +1,4 @@
+using System.Reflection;
 using UTool.Cli;
 using UTool.Core.Models;
 using UTool.ModLoader;
@@ -24,6 +25,15 @@ if (args.Length == 0 || args[0] is "-h" or "--help" or "help")
 {
     PrintUsage();
     return args.Length == 0 ? 1 : 0;
+}
+
+if (args[0] is "--version" or "-V")
+{
+    var host = Assembly.GetExecutingAssembly().GetName();
+    var sdk = typeof(UTool.Sdk.AssetPatch).Assembly.GetName();
+    var curve = Type.GetType("UTool.Sdk.CurvePatch, UTool.Sdk") is not null;
+    Console.WriteLine($"{host.Name} {host.Version} (UTool.Sdk {sdk.Version}, CurvePatch={(curve ? "yes" : "no")})");
+    return 0;
 }
 
 var command = args[0].ToLowerInvariant();

@@ -19,17 +19,21 @@ public static class ModCurvePreparer
     public static IReadOnlyList<string> Prepare(
         ModPackage mod,
         string preparedRoot,
-        ModCurvePrepareOptions options)
+        ModCurvePrepareOptions options,
+        IReadOnlyList<CodeCurvePatch>? codePatches = null)
     {
-        var curvesDir = Path.Combine(mod.RootPath, "curves");
-        var specs = CurveFloatPatchReader.ReadDirectory(curvesDir);
+        var curvesDir = Path.Combine(mod.RootPath, mod.Manifest.CurvePatchesDir ?? "curves");
+        var specs = CurveFloatPatchReader.ReadDirectory(curvesDir).ToList();
+        if (codePatches is { Count: > 0 })
+            specs.AddRange(BuildSpecsFromCode(cacheDir: Path.Combine(mod.RootPath, ".cache", "curve-source"), codePatches, options));
+
         if (specs.Count == 0)
             return [];
 
         if (options.SourcePakPaths.Count == 0)
         {
             throw new InvalidOperationException(
-                $"Mod '{mod.Manifest.Id}' has curves/*.curve.json but no curve source pak. " +
+                $"Mod '{mod.Manifest.Id}' has curve patches but no curve source pak. " +
                 "Set pak.curveSourcePak in mod.json (e.g. @paks) or pakAesKey if entries are encrypted.");
         }
 
@@ -122,5 +126,26 @@ public static class ModCurvePreparer
             File.Copy(uexp, targetUexp, overwrite: true);
 
         return new SourcePair(targetUasset, targetUexp);
+    }
+
+    private static IEnumerable<CurveFloatPatchSpec> BuildSpecsFromCode(
+        string cacheDir,
+        IReadOnlyList<CodeCurvePatch> codePatches,
+        ModCurvePrepareOptions options)
+    {
+        foreach (var patch in codePatches)
+        {
+            var assetName = patch.AssetName.EndsWith(".uasset", StringComparison.OrdinalIgnoreCase)
+                ? patch.AssetName
+                : patch.AssetName + ".uasset";
+
+            var sourcePair = EnsureSourcePair(
+                cacheDir,
+                options,
+                assetName,
+                patch.RelativeDirectory);
+
+            yield return CurveCodePatchRunner.BuildSpecFromUasset(sourcePair.UassetPath, patch);
+        }
     }
 }

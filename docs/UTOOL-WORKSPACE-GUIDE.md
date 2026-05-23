@@ -186,7 +186,7 @@ Wrong mount → mod loads but **game ignores** changes.
 
 Each `curves\*.curve.json` needs `assetName`, `minPatchTime`, `keys`. **`assetName`** drives extract/output name.
 
-250cap curves (from `scripts/Generate-CurvePatches.ps1`): `C_PlayerExperienceGrowth`, `C_PlayerTalentGrowth`, `C_PlayerBlueprintGrowth`, `C_SoloTalentGrowth`.
+250cap curves: `curves/*.curve.json` (from `scripts/Generate-CurvePatches.ps1`) **or** `[PatchCurve]` C# on `CurvePatch` / `CurveEditor` (same keys, no PS1).
 
 ---
 

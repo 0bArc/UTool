@@ -1,5 +1,7 @@
 using System.Diagnostics;
+using System.Reflection;
 using UTool.Core.Models;
+using UTool.Sdk;
 
 namespace UTool.ModLoader;
 
@@ -43,9 +45,10 @@ public static class ModCodeCompiler
 
     public static ModCompileResult Compile(ModPackage mod, string configuration = "Release")
     {
+        ModCodeProjectScaffold.EnsureProject(mod);
         var csproj = TryResolveProjectPath(mod)
             ?? throw new InvalidOperationException(
-                $"No code project for mod '{mod.Manifest.Id}'. Add code/*.csproj or mod.json codeProject.");
+                $"No code project for mod '{mod.Manifest.Id}'. Add code/*.csproj, code/*.cs, or mod.json codeProject.");
 
         var outDir = ResolveCompiledDir(mod);
         if (Directory.Exists(outDir))
@@ -80,6 +83,8 @@ public static class ModCodeCompiler
                 ?? throw new InvalidOperationException($"No mod assembly produced in {outDir}");
         }
 
+        SyncHostAssembliesToOutput(outDir);
+
         return new ModCompileResult
         {
             AssemblyPath = Path.GetFullPath(dll),
@@ -112,5 +117,21 @@ public static class ModCodeCompiler
         }
 
         return process.ExitCode;
+    }
+
+    /// <summary>Mod must load the same UTool.Sdk/Core DLLs as the running utool host (not a stale copy from another build).</summary>
+    internal static void SyncHostAssembliesToOutput(string outDir)
+    {
+        foreach (var asm in new[] { typeof(AssetPatch).Assembly, typeof(ModPackage).Assembly })
+            CopyAssemblyIfPresent(asm, outDir);
+    }
+
+    private static void CopyAssemblyIfPresent(Assembly assembly, string outDir)
+    {
+        var path = assembly.Location;
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            return;
+
+        File.Copy(path, Path.Combine(outDir, Path.GetFileName(path)), overwrite: true);
     }
 }
