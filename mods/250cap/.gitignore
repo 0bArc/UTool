@@ -1,0 +1,27 @@
+# Build results
+bin/
+obj/
+dist/
+
+# Visual Studio
+.vs/
+*.user
+*.sln.iml
+
+# Build files
+*.csproj.user
+*.vbproj.user
+
+# NuGet
+packages/
+*.nupkg
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+*.swp
+*.swo
+*~
