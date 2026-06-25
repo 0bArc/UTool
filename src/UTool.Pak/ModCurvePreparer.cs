@@ -11,6 +11,7 @@ public sealed class ModCurvePrepareOptions
     public IReadOnlyList<string> SourcePakPaths { get; init; } = [];
     public byte[]? AesKey { get; init; }
     public UnrealPakOptions? UnrealPakOptions { get; init; }
+    public bool PreserveSourcePaths { get; init; }
     public bool ForceRefresh { get; init; }
 }
 
@@ -52,9 +53,12 @@ public static class ModCurvePreparer
                 assetName,
                 spec.RelativeDirectory);
 
-            Directory.CreateDirectory(preparedRoot);
+            var outputRoot = options.PreserveSourcePaths
+                ? Path.Combine(preparedRoot, spec.RelativeDirectory.Replace('/', Path.DirectorySeparatorChar))
+                : preparedRoot;
+            Directory.CreateDirectory(outputRoot);
 
-            var outUasset = Path.Combine(preparedRoot, assetName);
+            var outUasset = Path.Combine(outputRoot, assetName);
             var outUexp = Path.ChangeExtension(outUasset, ".uexp");
 
             StreamingFileOps.CopyFileAsync(sourcePair.UassetPath, outUasset, overwrite: true).GetAwaiter().GetResult();

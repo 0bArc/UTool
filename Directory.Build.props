@@ -9,7 +9,7 @@
     <Company>UTool</Company>
     <Product>UTool</Product>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <Version>0.1.13</Version>
+    <Version>0.1.14</Version>
     <RootNamespace>UTool</RootNamespace>
   </PropertyGroup>
 </Project>

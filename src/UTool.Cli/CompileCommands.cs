@@ -16,14 +16,14 @@ internal static class CompileCommands
 
     public static int Run(string[] args)
     {
-        if (args.Length == 0 || args[0] is "-h" or "--help" or "help")
+        if (CliArgs.IsHelp(args))
         {
             PrintUsage();
             return 0;
         }
 
         var modDir = Path.GetFullPath(args[0]);
-        var package = ModDiscovery.TryLoadPackageAsync(modDir).GetAwaiter().GetResult();
+        var package = ModPackageCli.TryLoad(modDir);
         if (package is null)
         {
             Console.Error.WriteLine($"Failed to load mod from {modDir}");
@@ -39,7 +39,7 @@ internal static class CompileCommands
 
         try
         {
-            var configuration = GetArg(args, "-c") ?? GetArg(args, "--configuration") ?? "Release";
+            var configuration = CliArgs.GetArgAny(args, "-c", "--configuration") ?? "Release";
             var result = ModCodeCompiler.Compile(package, configuration);
             Console.WriteLine($"compiled: {result.AssemblyPath}");
 
@@ -51,37 +51,16 @@ internal static class CompileCommands
             foreach (var patch in bundle.PlayerDataPatches)
                 Console.WriteLine($"  playerdata: {patch.RelativePath} ({patch.PatchType.Name})");
 
-            if (!HasFlag(args, "--prepare"))
+            if (!CliArgs.HasFlag(args, "--prepare"))
                 return 0;
 
             var cfg = UToolConfig.Load(modDir);
-            var gameId = package.Manifest.Target?.GameId;
-            var sourcePakToken = package.Manifest.Pak?.SourcePak;
-            if (string.IsNullOrWhiteSpace(sourcePakToken)
-                && (ModCodeCompiler.HasCodeProject(package) || package.Manifest.PatchFiles.Count > 0))
-                sourcePakToken = "@data";
-            var sourcePak = string.IsNullOrWhiteSpace(sourcePakToken)
-                ? null
-                : cfg.ResolveSourcePak(sourcePakToken, gameId);
-            var curveSource = package.Manifest.Pak?.CurveSourcePak ?? "@paks";
-            var curveSourcePaks = cfg.ResolveSourcePakPaths(curveSource, gameId);
-
-            var toolchain = cfg.ResolveUnrealPakToolchain();
-            var prepared = ModAssetPreparer.Prepare(package, new ModPrepareOptions
+            var prepared = ModPreparePipeline.Prepare(package, cfg, new ModPrepareCliOptions
             {
-                SourcePakPath = sourcePak,
-                CurveSourcePakPaths = curveSourcePaks,
-                PakAesKey = cfg.ResolvePakAesKey(gameId),
-                UnrealPakOptions = UnrealPakToolchain.ToOptions(toolchain, cfg.ResolvePakAesKey(gameId)),
-                ExtractedDir = cfg.ResolveExistingExtractedDir(),
-                UnrealPakExecutable = toolchain.Executable,
                 CompiledAssemblyPath = result.AssemblyPath,
-                PlayerDataRoot = cfg.ResolvePlayerDataDir(gameId),
-                ForceExtract = HasFlag(args, "--force-extract"),
+                ForceExtract = CliArgs.HasFlag(args, "--force-extract"),
             });
-
-            foreach (var file in prepared.PreparedFiles)
-                Console.WriteLine($"prepared: {file} ({new FileInfo(file).Length} bytes)");
+            ModPreparePipeline.WritePreparedFiles(prepared.PreparedFiles);
 
             return 0;
         }
@@ -91,18 +70,4 @@ internal static class CompileCommands
             return 1;
         }
     }
-
-    private static string? GetArg(string[] args, string flag)
-    {
-        for (var i = 0; i < args.Length - 1; i++)
-        {
-            if (string.Equals(args[i], flag, StringComparison.OrdinalIgnoreCase))
-                return args[i + 1];
-        }
-
-        return null;
-    }
-
-    private static bool HasFlag(string[] args, string flag) =>
-        args.Any(a => string.Equals(a, flag, StringComparison.OrdinalIgnoreCase));
 }

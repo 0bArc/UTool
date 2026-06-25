@@ -23,6 +23,7 @@ public sealed class ModPrepareOptions
     public bool ForceExtract { get; init; }
     public string? CompiledAssemblyPath { get; init; }
     public string? PlayerDataRoot { get; init; }
+    public bool PreserveSourcePaths { get; init; }
     public OperationContext? Operation { get; init; }
     public bool SkipIfUpToDate { get; init; } = true;
 }
@@ -72,7 +73,9 @@ public static class ModAssetPreparer
 
         var inputHashes = BuildInputHashes(mod, options, jsonPatchesByAsset);
         var expectedOutputs = assetPaths
-            .Select(a => Path.Combine(preparedRoot, Path.GetFileName(a)))
+            .Select(a => Path.Combine(
+                preparedRoot,
+                ResolveExpectedPreparedRelativePath(a, options).Replace('/', Path.DirectorySeparatorChar)))
             .ToList();
 
         var incremental = new IncrementalBuildTracker(mod.RootPath, "prepare");
@@ -119,6 +122,7 @@ public static class ModAssetPreparer
                     SourcePakPaths = options.CurveSourcePakPaths,
                     AesKey = options.PakAesKey,
                     UnrealPakOptions = options.UnrealPakOptions,
+                    PreserveSourcePaths = options.PreserveSourcePaths,
                     ForceRefresh = options.ForceExtract,
                 },
                 curvePatches);
@@ -170,11 +174,11 @@ public static class ModAssetPreparer
             saves);
 
         var sourceJson = LoadSourceJson(mod, assetPath, options, extractionPipeline);
-        var issues = JsonSchemaValidator.ValidateUeExport(sourceJson);
+        var issues = JsonSchemaValidator.ValidateUeExport(sourceJson.Json);
         foreach (var issue in issues)
             UToolLog.Warn($"schema: {assetPath}", new { issue });
 
-        var current = sourceJson;
+        var current = sourceJson.Json;
 
         if (jsonPatchesByAsset.TryGetValue(assetPath, out var jsonOps))
             current = JsonAssetPatcher.Apply(current, jsonOps);
@@ -182,8 +186,8 @@ public static class ModAssetPreparer
         if (patchers.Count > 0)
             current = ModCodePatchRunner.ApplyAll(current, patchers, saves);
 
-        var stageName = Path.GetFileName(assetPath);
-        var target = Path.Combine(preparedRoot, stageName);
+        var stageName = ResolvePreparedRelativePath(assetPath, sourceJson.SourcePath, sourceJson.SourceRoot, options.PreserveSourcePaths);
+        var target = Path.Combine(preparedRoot, stageName.Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         StreamingFileOps.WriteTextAsync(target, current).GetAwaiter().GetResult();
         return target;
@@ -289,7 +293,9 @@ public static class ModAssetPreparer
         return byAsset;
     }
 
-    private static string LoadSourceJson(
+    private sealed record SourceJson(string Json, string? SourcePath, string? SourceRoot);
+
+    private static SourceJson LoadSourceJson(
         ModPackage mod,
         string assetPath,
         ModPrepareOptions options,
@@ -300,12 +306,21 @@ public static class ModAssetPreparer
         Directory.CreateDirectory(cacheDir);
         var cached = Path.Combine(cacheDir, fileName);
         var cacheMeta = cached + ".sha256";
+        var sourcePakEntry = options.PreserveSourcePaths
+            ? FindSourcePakEntryPath(options.SourcePakPath, options.PakAesKey, fileName)
+            : null;
 
         if (!options.ForceExtract && File.Exists(cached) && File.Exists(cacheMeta))
         {
             var expected = File.ReadAllText(cacheMeta).Trim();
-            if (string.Equals(ContentHasher.HashFile(cached), expected, StringComparison.OrdinalIgnoreCase))
-                return StreamingFileOps.ReadTextAsync(cached).GetAwaiter().GetResult();
+            if (!options.PreserveSourcePaths
+                && string.Equals(ContentHasher.HashFile(cached), expected, StringComparison.OrdinalIgnoreCase))
+            {
+                return new SourceJson(
+                    StreamingFileOps.ReadTextAsync(cached).GetAwaiter().GetResult(),
+                    cached,
+                    cacheDir);
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(options.ExtractedDir) && Directory.Exists(options.ExtractedDir))
@@ -316,7 +331,10 @@ public static class ModAssetPreparer
             if (indexed is not null)
             {
                 CacheSource(cached, cacheMeta, indexed);
-                return StreamingFileOps.ReadTextAsync(cached).GetAwaiter().GetResult();
+                return new SourceJson(
+                    StreamingFileOps.ReadTextAsync(cached).GetAwaiter().GetResult(),
+                    indexed,
+                    options.ExtractedDir);
             }
         }
 
@@ -324,7 +342,10 @@ public static class ModAssetPreparer
         if (extractedPath is not null)
         {
             CacheSource(cached, cacheMeta, extractedPath);
-            return StreamingFileOps.ReadTextAsync(cached).GetAwaiter().GetResult();
+            return new SourceJson(
+                StreamingFileOps.ReadTextAsync(cached).GetAwaiter().GetResult(),
+                extractedPath,
+                options.ExtractedDir);
         }
 
         var pak = options.SourcePakPath;
@@ -345,7 +366,95 @@ public static class ModAssetPreparer
             ?? throw new FileNotFoundException($"UnrealPak did not extract '{fileName}' from {pak}");
 
         CacheSource(cached, cacheMeta, extractedPath);
-        return StreamingFileOps.ReadTextAsync(cached).GetAwaiter().GetResult();
+        return new SourceJson(
+            StreamingFileOps.ReadTextAsync(cached).GetAwaiter().GetResult(),
+            sourcePakEntry ?? extractedPath,
+            extractDir);
+    }
+
+    private static string ResolvePreparedRelativePath(
+        string assetPath,
+        string? sourcePath,
+        string? sourceRoot,
+        bool preserveSourcePaths)
+    {
+        var requested = assetPath.Replace('\\', '/').TrimStart('/');
+        if (!preserveSourcePaths)
+            return Path.GetFileName(requested);
+
+        if (requested.Contains('/'))
+            return requested;
+
+        var sourceRelative = TryGetSourceRelativePath(sourcePath, sourceRoot);
+        return string.IsNullOrWhiteSpace(sourceRelative)
+            ? Path.GetFileName(requested)
+            : sourceRelative;
+    }
+
+    private static string ResolveExpectedPreparedRelativePath(string assetPath, ModPrepareOptions options)
+    {
+        if (!options.PreserveSourcePaths)
+            return Path.GetFileName(assetPath);
+
+        var requested = assetPath.Replace('\\', '/').TrimStart('/');
+        if (requested.Contains('/'))
+            return requested;
+
+        var sourcePakEntry = FindSourcePakEntryPath(options.SourcePakPath, options.PakAesKey, Path.GetFileName(assetPath));
+        return ResolvePreparedRelativePath(assetPath, sourcePakEntry, sourceRoot: null, preserveSourcePaths: true);
+    }
+
+    private static string? TryGetSourceRelativePath(string? sourcePath, string? sourceRoot)
+    {
+        if (string.IsNullOrWhiteSpace(sourcePath))
+            return null;
+
+        var relative = sourcePath;
+        if (!string.IsNullOrWhiteSpace(sourceRoot) && Directory.Exists(sourceRoot))
+        {
+            try
+            {
+                relative = Path.GetRelativePath(sourceRoot, sourcePath);
+            }
+            catch
+            {
+                relative = sourcePath;
+            }
+        }
+
+        var normalized = relative.Replace('\\', '/');
+        var parts = normalized.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        for (var i = parts.Length - 2; i >= 0; i--)
+        {
+            if (parts[i].Equals("Data", StringComparison.OrdinalIgnoreCase))
+                return string.Join('/', parts[(i + 1)..]);
+        }
+
+        return Path.IsPathRooted(relative) || normalized.Contains(':')
+            ? Path.GetFileName(sourcePath)
+            : normalized;
+    }
+
+    private static string? FindSourcePakEntryPath(string? pakPath, byte[]? aesKey, string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(pakPath) || !File.Exists(pakPath))
+            return null;
+
+        try
+        {
+            var archive = PakArchiveCache.Open(
+                pakPath,
+                aesKey is null ? null : new PakOpenOptions { AesKey = aesKey });
+
+            return archive.Entries.Values
+                .Where(e => !e.IsDeleted)
+                .Select(e => e.Path)
+                .FirstOrDefault(path => string.Equals(Path.GetFileName(path), fileName, StringComparison.OrdinalIgnoreCase));
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static void CacheSource(string cached, string cacheMeta, string extractedPath)

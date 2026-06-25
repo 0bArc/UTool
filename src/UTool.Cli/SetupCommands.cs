@@ -17,7 +17,7 @@ internal static class SetupCommands
 
     public static int Run(string[] args)
     {
-        if (args.Length == 0 || args[0] is "-h" or "--help" or "help")
+        if (CliArgs.IsHelp(args))
         {
             PrintUsage();
             return 0;
@@ -25,11 +25,7 @@ internal static class SetupCommands
 
         var sub = args[0].ToLowerInvariant();
         if (sub != "unrealpak")
-        {
-            Console.Error.WriteLine($"Unknown setup command: {sub}");
-            PrintUsage();
-            return 1;
-        }
+            return CliCommand.Unknown(sub, PrintUsage, "setup command");
 
         try
         {
@@ -45,8 +41,8 @@ internal static class SetupCommands
     private static int SetupUnrealPak(string[] args)
     {
         var cfg = UToolConfig.Load();
-        var from = GetArg(args, "--from");
-        var force = HasFlag(args, "--force");
+        var from = CliArgs.GetArg(args, "--from");
+        var force = CliArgs.HasFlag(args, "--force");
 
         if (string.IsNullOrWhiteSpace(from))
         {
@@ -76,7 +72,7 @@ internal static class SetupCommands
             return 1;
         }
 
-        var preferAppData = HasFlag(args, "--appdata");
+        var preferAppData = CliArgs.HasFlag(args, "--appdata");
         Console.WriteLine($"Source: {sourceEngine}");
         var paths = UnrealPakToolchain.SyncFromSource(
             sourceEngine,
@@ -89,20 +85,6 @@ internal static class SetupCommands
         Console.WriteLine($"  exe:    {paths.Executable}");
         return 0;
     }
-
-    private static string? GetArg(string[] args, string flag)
-    {
-        for (var i = 0; i < args.Length - 1; i++)
-        {
-            if (string.Equals(args[i], flag, StringComparison.OrdinalIgnoreCase))
-                return args[i + 1];
-        }
-
-        return null;
-    }
-
-    private static bool HasFlag(string[] args, string flag) =>
-        args.Any(a => string.Equals(a, flag, StringComparison.OrdinalIgnoreCase));
 
     private static string? ResolveSourceEngineArg(string? from)
     {
