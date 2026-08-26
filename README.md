@@ -1,94 +1,67 @@
 # UTool
 
-[![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/download/dotnet/8.0)
-[![build](https://img.shields.io/github/actions/workflow/status/0bArc/utool/build.yml?label=build)](https://github.com/0bArc/utool/actions/workflows/build.yml)
-[![platform](https://img.shields.io/badge/platform-Windows-0078D4?logo=windows&logoColor=white)](https://github.com/0bArc/utool)
-[![UE](https://img.shields.io/badge/engine-UE4%20%7C%20UE5-333333)](https://github.com/0bArc/utool)
-[![license](https://img.shields.io/github/license/0bArc/utool)](LICENSE)
+C++20 UE4/UE5 modding toolkit. Author mods in **Lua**, pack with **UnrealPak**.
 
-**UTool** — modding toolkit for extracting, patching, rebuilding, and packaging UE4/UE5 game assets, including pak files, JSON data, CurveFloat assets, and player data.
+Version **0.2.0**.
 
-This repository is the **source tree** for the `utool` CLI and its libraries (`UTool.*`). Install and run **`utool`**, not a binary named after the repo folder.
+## Layout
+
+```text
+include/UTool/   public headers (Core, Pak, Mod, Lua, Cli)
+src/             implementation
+examples/        sample mods (250cap, morexp, example-mod)
+assets/          UnrealPak.zip / extracted toolchain
+docs/            guides
+```
+
+## Build
+
+`NMake` breaks on the `#` in `c#` paths. Use **Ninja** and an out-of-tree build dir:
+
+```powershell
+.\cmake\build-release.cmd
+# build:   F:\Data\personal\utool-build\utool.exe
+# install: %LOCALAPPDATA%\utool\utool.exe
+```
+
+Put install dir on PATH (once per machine):
+
+```powershell
+$utoolBin = Join-Path $env:LOCALAPPDATA "utool"
+[Environment]::SetEnvironmentVariable(
+  "Path",
+  $env:Path + ";" + $utoolBin,
+  "User")
+$env:Path += ";" + $utoolBin   # current session
+utool --version
+```
 
 ## Quick start
 
-```powershell
-git clone https://github.com/0bArc/utool.git
-cd utool
-dotnet run --project build.csproj -c Release
-```
-
-Add `dist\utool` to `PATH`, then:
+1. Copy `utool.json.example` → `utool.json` and set game pak paths.
+2. Ensure `assets/UnrealPak.zip` is present (auto-extracts on first pack).
+3. Write a mod with `mod.json` + `scripts/*.lua` (+ optional `patches/`, `content/`).
+4. Run:
 
 ```text
-utool help
-utool validate mods
-utool compile mods\example-mod
+utool discover <mods-dir>
+utool validate <mods-dir>
 utool pak build-mod <mod-dir>
 ```
 
-Without PATH:
+## Lua API
 
-```powershell
-dotnet build utool.sln -c Release
-dist\utool\utool.exe help
+See **[docs/lua.md](docs/lua.md)** for the full surface (`utool.patch_asset` / `utool.patch_curve`, `utool.editor`, `utool.curve`).
+
+```lua
+utool.patch_curve("C_PlayerExperienceGrowth", "Data/Character", function()
+  local last = utool.curve:LastKey()
+  utool.curve:AddKey(last.Time + 1, last.Value + 144000)
+end)
+
+utool.patch_asset("D_CharacterGrowth.json", function()
+  utool.editor:SetOnArrayElementsWhere("/Rows", "Name", "Player", "/MaxDisplayLevel", 250)
+end)
 ```
 
-## What it does
-
-| Area | CLI / behavior |
-|------|----------------|
-| **Mods** | `list`, `validate`, `compile` — `mod.json`, C# `[PatchAsset]` / `[PatchPlayerData]`, JSON patches |
-| **Paks** | `pak data pull/list`, `pak find`, `pak ue extract` (dir or `@paks`), build-mod — UnrealPak for `*_P.pak` |
-| **Saves** | `playerdata` — local UE4 player data (e.g. accolades) |
-| **Setup** | `setup unrealpak` — bundled `assets/UnrealPak.zip` or custom engine path |
-
-Plain content-only packs can use the built-in C# `PakBuilder`; **mount-point overrides** need UnrealPak (`useUnrealPak` or `sourcePak` in `mod.json`).
-
-## Solution layout
-
-| Project | Role |
-|---------|------|
-| **UTool.Cli** | **`utool`** executable |
-| **UTool.Sdk** | Mod author API — `AssetPatch`, `JsonAssetEditor`, player-data patches |
-| **UTool.ModLoader** | Discover mods, apply patches, compile/run mod DLLs |
-| **UTool.Pak** | Pak index/search, `ModAssetPreparer`, UnrealPak wrapper |
-| **UTool.Infrastructure** | Cache, incremental builds, sandbox, parallel prepare |
-| **UTool.Core** | `ModManifest`, shared models |
-
-```
-Cli → Pak, ModLoader → Infrastructure, Sdk → Core
-```
-
-Details: [src/README.md](src/README.md).
-
-## Config
-
-Copy [utool.json.example](utool.json.example) → `utool.json` (gitignored). Legacy `csstratware.json` is still read if present. Mod layout: [mod.json.example](mod.json.example) and [mods/example-mod/](mods/example-mod/).
-
-| Key | Purpose |
-|-----|---------|
-| `unrealPak` / `unrealEngineDir` | Optional; default uses local `assets/UnrealPak.zip` (see [assets/README.md](assets/README.md)) |
-| `gamePaksDir`, `dataPak` | Game paks (read/extract only) |
-| `defaultMountPoint` | UE virtual mount in packed mods |
-
-**UnrealPak resolution** (first hit wins):
-
-1. `<repo>/assets/UnrealPak/` — auto-extract from `assets/UnrealPak.zip` on first pack
-2. `<project>/tools/UnrealPak/Engine/` — `setup unrealpak --from …`
-3. `%LocalAppData%\utool\UnrealPak\Engine\` — `setup unrealpak --appdata`
-4. Legacy `C:\software\UnrealPak\` or Epic UE installs
-
-Env: `UTOOL_UNREALPAK` (exe path), `UTOOL_ROOT` (repo root if auto-detect fails).
-
-## Docs
-
-- [src/README.md](src/README.md) — SDK, compile/pak flow, command reference
-- [docs/setup.md](docs/setup.md) — game mod walkthrough from scratch
-- [docs/UTOOL-WORKSPACE-GUIDE.md](docs/UTOOL-WORKSPACE-GUIDE.md) — Icarus workspace mods (250cap, noquarrites)
-
-## License
-
-This project is licensed under the [MIT License](LICENSE).
-
-Third-party components and legal obligations (including **UAssetAPI** and **UnrealPak** / Epic’s Unreal Engine EULA) are documented in [NOTICES.md](NOTICES.md). You must supply your own Unreal Engine toolchain for UnrealPak; engine binaries are not redistributed as part of this repository.
+Samples: [examples/250cap](examples/250cap), [examples/morexp](examples/morexp). Workspace guide: [docs/UTOOL-WORKSPACE-GUIDE.md](docs/UTOOL-WORKSPACE-GUIDE.md).

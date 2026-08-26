@@ -2,7 +2,7 @@
   "gamePaksDir": "D:\\Games\\YourGame\\Content\\Paks",
   "dataPak": "D:\\Games\\YourGame\\Content\\Data\\data.pak",
   "playerDataDir": "C:\\Users\\you\\AppData\\Local\\YourGame\\Saved\\PlayerData",
-  "extractedDir": "extracted",
+  "extractedDir": ".extracted",
   "pakAesKey": "64_HEX_CHARS_OR_BASE64_AES_256_KEY",
   "defaultMountPoint": "../../../YourGame/Content/data/",
   "games": {

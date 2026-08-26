@@ -2,10 +2,10 @@
   "id": "example.mod",
   "name": "Example Mod",
   "version": "0.1.0",
-  "description": "Starter mod manifest for utool (see examples/example-mod/).",
-  "author": "you",
+  "description": "Starter mod package for utool (Lua).",
+  "author": "utool",
   "target": {
-    "gameId": "Icarus",
+    "gameId": "your-game",
     "engineVersion": "4.27",
     "minGameVersion": "1.0.0"
   },
@@ -14,8 +14,7 @@
   "scripts": ["scripts/example.lua"],
   "pak": {
     "output": "dist/ExampleMod_P.pak",
-    "mountPoint": "../../../Icarus/Content/data/",
-    "sourcePak": "@data",
+    "mountPoint": "../../../your-game/",
     "useUnrealPak": true
   }
 }

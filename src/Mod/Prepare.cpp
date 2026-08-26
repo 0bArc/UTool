@@ -1,0 +1,530 @@
+#include "UTool/Mod/Prepare.hpp"
+
+#include "UTool/Lua/Host.hpp"
+#include "UTool/Mod/JsonEditor.hpp"
+#include "UTool/Pak/UnrealPak.hpp"
+
+#include <algorithm>
+#include <cctype>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <unordered_map>
+
+namespace UTool::Mod {
+namespace {
+
+std::string readText(const std::filesystem::path& path) {
+  std::ifstream in(path, std::ios::binary);
+  if (!in)
+    throw std::runtime_error("Cannot read " + path.string());
+  std::ostringstream ss;
+  ss << in.rdbuf();
+  return ss.str();
+}
+
+void writeText(const std::filesystem::path& path, const std::string& text) {
+  std::filesystem::create_directories(path.parent_path());
+  std::ofstream out(path, std::ios::binary);
+  if (!out)
+    throw std::runtime_error("Cannot write " + path.string());
+  out << text;
+}
+
+void copyFile(const std::filesystem::path& from, const std::filesystem::path& to) {
+  std::filesystem::create_directories(to.parent_path());
+  std::filesystem::copy_file(from, to, std::filesystem::copy_options::overwrite_existing);
+}
+
+void copyTree(const std::filesystem::path& source, const std::filesystem::path& target) {
+  for (const auto& entry : std::filesystem::recursive_directory_iterator(source)) {
+    if (!entry.is_regular_file())
+      continue;
+    const auto name = entry.path().filename().string();
+    if (name.find(".utool-curve-note.txt") != std::string::npos)
+      continue;
+    const auto rel = std::filesystem::relative(entry.path(), source);
+    copyFile(entry.path(), target / rel);
+  }
+}
+
+bool iequals(std::string_view a, std::string_view b) {
+  if (a.size() != b.size())
+    return false;
+  for (size_t i = 0; i < a.size(); ++i) {
+    if (std::tolower(static_cast<unsigned char>(a[i])) !=
+        std::tolower(static_cast<unsigned char>(b[i])))
+      return false;
+  }
+  return true;
+}
+
+std::string sanitizePakName(std::string id) {
+  for (char& c : id) {
+    if (c == '.' || c == ' ')
+      c = '-';
+  }
+  return id;
+}
+
+bool shouldPreserveSourcePaths(std::string mount) {
+  for (char& c : mount) {
+    if (c == '\\')
+      c = '/';
+  }
+  while (!mount.empty() && mount.back() == '/')
+    mount.pop_back();
+  // Only the data-pak root keeps Character/... subfolders. Curve mounts such as
+  // .../Content/Data/Character/ must stay flat so UnrealPak mount matches Icarus.
+  return mount.size() >= 13 && iequals(mount.substr(mount.size() - 13), "/Content/Data");
+}
+
+std::filesystem::path ensurePatchPakName(std::filesystem::path output,
+                                         const std::optional<std::string>& gameId) {
+  if (!gameId || !iequals(*gameId, "Icarus"))
+    return output;
+  if (!iequals(output.extension().string(), ".pak"))
+    return output;
+  auto name = output.stem().string();
+  if (name.size() >= 2 && iequals(name.substr(name.size() - 2), "_P"))
+    return output;
+  return output.parent_path() / (name + "_P.pak");
+}
+
+std::optional<std::filesystem::path> findExtractedAsset(
+    const std::filesystem::path& extractedDir,
+    const std::string& fileName) {
+  if (!std::filesystem::is_directory(extractedDir))
+    return std::nullopt;
+  for (const auto& entry : std::filesystem::recursive_directory_iterator(extractedDir)) {
+    if (!entry.is_regular_file())
+      continue;
+    if (iequals(entry.path().filename().string(), fileName))
+      return entry.path();
+  }
+  return std::nullopt;
+}
+
+std::filesystem::path extractAssetViaUnrealPak(
+    const std::filesystem::path& pakPath,
+    const std::string& assetFileName,
+    const std::filesystem::path& pullDir,
+    const Pak::UnrealPakOptions& options) {
+  if (std::filesystem::exists(pullDir))
+    std::filesystem::remove_all(pullDir);
+  std::filesystem::create_directories(pullDir);
+  const std::string filter = "*" + std::filesystem::path(assetFileName).stem().string() + "*";
+  Pak::extract(pakPath, pullDir, filter, options);
+
+  if (auto found = findExtractedAsset(pullDir, assetFileName))
+    return *found;
+  throw std::runtime_error("UnrealPak extract did not produce " + assetFileName + " from " +
+                           pakPath.string());
+}
+
+using PatchMap = std::unordered_map<std::string, nlohmann::json>;
+
+PatchMap loadJsonPatches(const Core::ModPackage& package) {
+  PatchMap byAsset;
+  for (const auto& patchRel : package.manifest.patchFiles) {
+    const auto path = package.rootPath / patchRel;
+    auto doc = nlohmann::json::parse(readText(path));
+    if (!doc.contains("patches") || !doc["patches"].is_array())
+      continue;
+    for (const auto& patch : doc["patches"]) {
+      std::string asset = patch.value("assetPath", "");
+      if (asset.empty())
+        asset = patch.value("asset", "");
+      // Use filename for matching
+      const auto base = std::filesystem::path(asset).filename().string();
+      std::string key = base.empty() ? asset : base;
+      if (key.size() > 5 && key.substr(key.size() - 2) == "_C") {
+        // keep as-is
+      }
+      if (!key.empty() && key.find(".json") == std::string::npos &&
+          key.find('.') == std::string::npos)
+        key += ".json";
+
+      auto ops = patch.contains("operations") ? patch["operations"] : nlohmann::json::array();
+      if (!byAsset.contains(key))
+        byAsset[key] = nlohmann::json::array();
+      for (const auto& op : ops)
+        byAsset[key].push_back(op);
+    }
+  }
+  return byAsset;
+}
+
+std::vector<std::filesystem::path> collectScripts(const Core::ModPackage& package) {
+  std::vector<std::filesystem::path> scripts;
+  for (const auto& rel : package.manifest.scripts)
+    scripts.push_back(package.rootPath / rel);
+
+  if (!scripts.empty())
+    return scripts;
+
+  const auto scriptsDir = package.rootPath / "scripts";
+  if (!std::filesystem::is_directory(scriptsDir))
+    return scripts;
+  for (const auto& entry : std::filesystem::directory_iterator(scriptsDir)) {
+    if (!entry.is_regular_file())
+      continue;
+    if (entry.path().extension() == ".lua")
+      scripts.push_back(entry.path());
+  }
+  std::sort(scripts.begin(), scripts.end());
+  return scripts;
+}
+
+}  // namespace
+
+std::filesystem::path mergeForPack(
+    const Core::ModPackage& package,
+    const std::filesystem::path& preparedDir) {
+  std::vector<std::filesystem::path> roots;
+  for (const auto& r : package.manifest.contentRoots) {
+    const auto p = package.rootPath / r;
+    if (std::filesystem::is_directory(p))
+      roots.push_back(p);
+  }
+
+  const bool hasPrepared =
+      std::filesystem::is_directory(preparedDir) &&
+      std::filesystem::directory_iterator(preparedDir) != std::filesystem::directory_iterator{};
+
+  if (roots.empty() && !hasPrepared)
+    throw std::runtime_error("No packable content for mod '" + package.manifest.id + "'.");
+  if (roots.empty())
+    return preparedDir;
+  if (!hasPrepared)
+    return roots.size() == 1 ? roots[0] : [&] {
+      const auto merged = package.rootPath / ".cache" / "pack-content";
+      if (std::filesystem::exists(merged))
+        std::filesystem::remove_all(merged);
+      std::filesystem::create_directories(merged);
+      for (const auto& root : roots)
+        copyTree(root, merged);
+      return merged;
+    }();
+
+  const auto merged = package.rootPath / ".cache" / "pack-content";
+  if (std::filesystem::exists(merged))
+    std::filesystem::remove_all(merged);
+  std::filesystem::create_directories(merged);
+  copyTree(preparedDir, merged);
+  for (const auto& root : roots)
+    copyTree(root, merged);
+  return merged;
+}
+
+PrepareResult prepareMod(
+    const Core::ModPackage& package,
+    const Core::Config& /*config*/,
+    const PrepareOptions& options) {
+  PrepareResult result;
+  const auto preparedRoot = package.rootPath / ".cache" / "prepared";
+  if (std::filesystem::exists(preparedRoot))
+    std::filesystem::remove_all(preparedRoot);
+  std::filesystem::create_directories(preparedRoot);
+
+  try {
+    auto scripts = collectScripts(package);
+    Lua::ScriptRegistrations regs;
+    if (!scripts.empty())
+      regs = Lua::loadModScripts(scripts);
+
+    auto jsonPatches = loadJsonPatches(package);
+
+    // Merge lua asset registrations into patch list keys
+    for (const auto& assetReg : regs.assets) {
+      if (!jsonPatches.contains(assetReg.assetFileName))
+        jsonPatches[assetReg.assetFileName] = nlohmann::json::array();
+    }
+
+    for (const auto& [assetFile, ops] : jsonPatches) {
+      std::optional<std::filesystem::path> sourcePath;
+      if (options.extractedDir)
+        sourcePath = findExtractedAsset(*options.extractedDir, assetFile);
+
+      if (!sourcePath && options.sourcePak) {
+        const auto pullDir =
+            package.rootPath / ".cache" / "ue-extract" / std::filesystem::path(assetFile).stem();
+        sourcePath =
+            extractAssetViaUnrealPak(*options.sourcePak, assetFile, pullDir, options.unrealPak);
+      }
+
+      if (!sourcePath) {
+        throw std::runtime_error(
+            "Cannot locate source JSON for " + assetFile +
+            ". Set pak.sourcePak / extractedDir in utool.json.");
+      }
+
+      auto current = readText(*sourcePath);
+      if (!ops.empty())
+        current = applyPatchOperations(current, ops);
+
+      for (const auto& assetReg : regs.assets) {
+        if (!iequals(assetReg.assetFileName, assetFile))
+          continue;
+        JsonAssetEditor editor(current);
+        assetReg.apply(editor);
+        current = editor.toJson(true);
+      }
+
+      std::filesystem::path target = preparedRoot / assetFile;
+      for (const auto& assetReg : regs.assets) {
+        if (!iequals(assetReg.assetFileName, assetFile))
+          continue;
+        if (!assetReg.relativeDirectory.empty())
+          target = preparedRoot / assetReg.relativeDirectory / assetFile;
+        break;
+      }
+      writeText(target, current);
+      result.preparedFiles.push_back(target);
+      std::cout << "prepared: " << target.string() << '\n';
+    }
+
+    // Curves from *.curve.json
+    const auto curvesDir =
+        package.rootPath / (package.manifest.curvePatchesDir.value_or("curves"));
+    auto curveSpecs = readCurveJsonDirectory(curvesDir);
+
+    // Curves from Lua
+    for (const auto& curveReg : regs.curves) {
+      if (options.curveSourcePaks.empty())
+        throw std::runtime_error(
+            "Mod has Lua curve patches but no curve source pak. Set pak.curveSourcePak (e.g. @paks).");
+
+      std::string assetFile = curveReg.assetName;
+      if (assetFile.size() < 7 || !iequals(assetFile.substr(assetFile.size() - 7), ".uasset"))
+        assetFile += ".uasset";
+
+      const auto cacheDir = package.rootPath / ".cache" / "curve-source" / curveReg.relativeDirectory;
+      const auto cachedUasset = cacheDir / assetFile;
+      if (options.forceExtract || !std::filesystem::is_regular_file(cachedUasset)) {
+        std::filesystem::path found;
+        for (const auto& pak : options.curveSourcePaks) {
+          try {
+            const auto pullDir =
+                package.rootPath / ".cache" / "curve-source" / ".pull" /
+                std::filesystem::path(assetFile).stem();
+            found = extractAssetViaUnrealPak(pak, assetFile, pullDir, options.unrealPak);
+            break;
+          } catch (...) {
+            // try next pak
+          }
+        }
+        if (found.empty())
+          throw std::runtime_error("Failed to extract curve asset " + assetFile);
+        std::filesystem::create_directories(cacheDir);
+        copyFile(found, cachedUasset);
+        const auto foundUexp = found.replace_extension(".uexp");
+        if (std::filesystem::is_regular_file(foundUexp))
+          copyFile(foundUexp, cachedUasset.parent_path() / (cachedUasset.stem().string() + ".uexp"));
+      }
+
+      auto vanillaKeys = readCurveKeys(cachedUasset);
+      CurveEditor editor(curveReg.assetName, vanillaKeys);
+      curveReg.apply(editor);
+
+      CurveFloatPatchSpec spec;
+      spec.assetName = curveReg.assetName;
+      spec.relativeDirectory = curveReg.relativeDirectory;
+      spec.extendFromVanilla = curveReg.extendFromVanilla;
+      if (!vanillaKeys.empty()) {
+        const float vanillaMax =
+            std::max_element(vanillaKeys.begin(), vanillaKeys.end(),
+                             [](const CurveKey& a, const CurveKey& b) { return a.time < b.time; })
+                ->time;
+        spec.minPatchTime = vanillaMax;
+        for (const auto& k : editor.keys()) {
+          if (k.time > vanillaMax + 1e-4f)
+            spec.keys.push_back(k);
+        }
+      } else {
+        spec.keys = editor.keys();
+      }
+
+      const auto outRoot = options.preserveSourcePaths
+                               ? preparedRoot / std::filesystem::path(curveReg.relativeDirectory)
+                               : preparedRoot;
+      std::filesystem::create_directories(outRoot);
+      const auto outUasset = outRoot / assetFile;
+      copyFile(cachedUasset, outUasset);
+      const auto cachedUexp = cachedUasset.parent_path() / (cachedUasset.stem().string() + ".uexp");
+      const auto outUexp = outUasset.parent_path() / (outUasset.stem().string() + ".uexp");
+      if (std::filesystem::is_regular_file(cachedUexp))
+        copyFile(cachedUexp, outUexp);
+
+      applyCurveKeys(outUasset, spec);
+      result.preparedFiles.push_back(outUasset);
+      if (std::filesystem::is_regular_file(outUexp))
+        result.preparedFiles.push_back(outUexp);
+      std::cout << "curve prepared: " << outUasset.string() << '\n';
+    }
+
+    for (const auto& spec : curveSpecs) {
+      if (options.curveSourcePaks.empty())
+        throw std::runtime_error("curve json patches require pak.curveSourcePak");
+
+      std::string assetFile = spec.assetName;
+      if (assetFile.size() < 7 || !iequals(assetFile.substr(assetFile.size() - 7), ".uasset"))
+        assetFile += ".uasset";
+
+      const auto cacheDir = package.rootPath / ".cache" / "curve-source" / spec.relativeDirectory;
+      const auto cachedUasset = cacheDir / assetFile;
+      if (!std::filesystem::is_regular_file(cachedUasset)) {
+        std::filesystem::path found;
+        for (const auto& pak : options.curveSourcePaks) {
+          try {
+            const auto pullDir =
+                package.rootPath / ".cache" / "curve-source" / ".pull" /
+                std::filesystem::path(assetFile).stem();
+            found = extractAssetViaUnrealPak(pak, assetFile, pullDir, options.unrealPak);
+            break;
+          } catch (...) {
+          }
+        }
+        if (found.empty())
+          throw std::runtime_error("Failed to extract " + assetFile);
+        std::filesystem::create_directories(cacheDir);
+        copyFile(found, cachedUasset);
+        auto foundUexp = found;
+        foundUexp.replace_extension(".uexp");
+        if (std::filesystem::is_regular_file(foundUexp))
+          copyFile(foundUexp, cacheDir / (std::filesystem::path(assetFile).stem().string() + ".uexp"));
+      }
+
+      const auto outRoot = options.preserveSourcePaths
+                               ? preparedRoot / std::filesystem::path(spec.relativeDirectory)
+                               : preparedRoot;
+      std::filesystem::create_directories(outRoot);
+      const auto outUasset = outRoot / assetFile;
+      copyFile(cachedUasset, outUasset);
+      const auto cachedUexp = cacheDir / (std::filesystem::path(assetFile).stem().string() + ".uexp");
+      const auto outUexp = outRoot / (std::filesystem::path(assetFile).stem().string() + ".uexp");
+      if (std::filesystem::is_regular_file(cachedUexp))
+        copyFile(cachedUexp, outUexp);
+      applyCurveKeys(outUasset, spec);
+      result.preparedFiles.push_back(outUasset);
+      std::cout << "curve prepared: " << outUasset.string() << '\n';
+    }
+
+    result.ok = true;
+    result.preparedContentDir = preparedRoot;
+    result.message = "prepared " + std::to_string(result.preparedFiles.size()) + " file(s)";
+  } catch (const std::exception& ex) {
+    result.ok = false;
+    result.message = ex.what();
+  }
+  return result;
+}
+
+BuildModResult buildMod(
+    const Core::ModPackage& package,
+    const Core::Config& config,
+    const std::optional<std::filesystem::path>& outputOverride,
+    const std::optional<std::string>& mountOverride,
+    bool compress,
+    bool forceExtract) {
+  BuildModResult result;
+  try {
+    std::optional<std::string> gameId =
+        package.manifest.target ? package.manifest.target->gameId : std::nullopt;
+
+    std::filesystem::path output;
+    if (outputOverride)
+      output = *outputOverride;
+    else if (package.manifest.pak && package.manifest.pak->output)
+      output = package.rootPath / *package.manifest.pak->output;
+    else
+      output = package.rootPath / "dist" / (sanitizePakName(package.manifest.id) + "_P.pak");
+
+    if (!output.is_absolute())
+      output = package.rootPath / output;
+
+    std::string mount;
+    if (mountOverride)
+      mount = *mountOverride;
+    else if (package.manifest.pak && package.manifest.pak->mountPoint)
+      mount = *package.manifest.pak->mountPoint;
+    else if (auto m = config.resolveMountPoint(gameId))
+      mount = *m;
+    else
+      throw std::runtime_error(
+          "Mount point required: mod.json pak.mountPoint, --mount, or defaultMountPoint.");
+
+    const bool useUePack = (package.manifest.pak && package.manifest.pak->useUnrealPak) ||
+                           (package.manifest.pak && package.manifest.pak->sourcePak) || true;
+
+    const auto scripts = collectScripts(package);
+    const auto curvesDir =
+        package.rootPath / (package.manifest.curvePatchesDir.value_or("curves"));
+    const bool hasJsonCurves =
+        std::filesystem::is_directory(curvesDir) &&
+        std::filesystem::directory_iterator(curvesDir) != std::filesystem::directory_iterator{};
+    const bool shouldPrepare =
+        !package.manifest.patchFiles.empty() || !scripts.empty() || hasJsonCurves;
+
+    std::filesystem::path contentRoot;
+    if (shouldPrepare) {
+      PrepareOptions opts;
+      opts.forceExtract = forceExtract;
+      opts.preserveSourcePaths = shouldPreserveSourcePaths(mount);
+      opts.extractedDir = config.resolveExistingExtractedDir();
+
+      const auto toolchain = Pak::resolveToolchain(config.unrealPak, config.unrealEngineDir,
+                                                   config.configDirectory, true);
+      opts.unrealPak = Pak::toOptions(toolchain);
+
+      std::optional<std::string> sourceToken =
+          package.manifest.pak ? package.manifest.pak->sourcePak : std::nullopt;
+      if ((!sourceToken || sourceToken->empty()) &&
+          (!package.manifest.patchFiles.empty() || !scripts.empty()))
+        sourceToken = "@data";
+      if (sourceToken)
+        opts.sourcePak = config.resolveSourcePak(sourceToken, gameId);
+
+      std::optional<std::string> curveToken =
+          package.manifest.pak && package.manifest.pak->curveSourcePak
+              ? package.manifest.pak->curveSourcePak
+              : std::string("@paks");
+      if (!scripts.empty() || hasJsonCurves)
+        opts.curveSourcePaks = config.resolveSourcePakPaths(curveToken, gameId);
+
+      auto prepared = prepareMod(package, config, opts);
+      if (!prepared.ok)
+        throw std::runtime_error(prepared.message);
+      contentRoot = mergeForPack(package, prepared.preparedContentDir);
+    } else {
+      contentRoot = mergeForPack(package, package.rootPath / ".cache" / "prepared");
+    }
+
+    output = std::filesystem::weakly_canonical(ensurePatchPakName(output, gameId));
+    std::filesystem::create_directories(output.parent_path());
+
+    if (useUePack) {
+      const auto toolchain = Pak::resolveToolchain(config.unrealPak, config.unrealEngineDir,
+                                                   config.configDirectory, true);
+      Pak::packDirectory(contentRoot, output, mount, compress, Pak::toOptions(toolchain));
+      std::cout << "Built mod pak (UnrealPak): " << output.string() << '\n';
+    }
+
+    const bool keepCache = package.manifest.pak && package.manifest.pak->keepCache;
+    if (!keepCache) {
+      const auto cache = package.rootPath / ".cache";
+      if (std::filesystem::exists(cache))
+        std::filesystem::remove_all(cache);
+    }
+
+    result.ok = true;
+    result.outputPak = output;
+    result.message = "ok";
+  } catch (const std::exception& ex) {
+    result.ok = false;
+    result.message = ex.what();
+  }
+  return result;
+}
+
+}  // namespace UTool::Mod

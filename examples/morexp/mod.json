@@ -1,0 +1,22 @@
+{
+  "id": "icarus.morexp",
+  "name": "More XP (10x)",
+  "version": "1.0.0",
+  "description": "Multiplies all ExperienceGranted values in D_ExperienceEvents by 10.",
+  "author": "utool",
+  "target": {
+    "gameId": "Icarus",
+    "engineVersion": "4.27",
+    "minGameVersion": "1.0.0"
+  },
+  "contentRoots": [],
+  "scripts": [
+    "scripts/scale_xp.lua"
+  ],
+  "pak": {
+    "output": "dist/morexp_P.pak",
+    "mountPoint": "../../../Icarus/Content/",
+    "sourcePak": "@data",
+    "useUnrealPak": true
+  }
+}

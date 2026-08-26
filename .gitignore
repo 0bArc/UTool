@@ -1,4 +1,17 @@
-## Build
+## Build (NMake breaks on '#' in c# paths — use Ninja out-of-tree)
+build/
+**/build/
+F:/Data/personal/utool-build/
+../utool-build/
+
+## CMake / deps
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+_deps/
+
+## Artifacts
 bin/
 obj/
 out/
@@ -28,36 +41,30 @@ secrets.json
 utool.json
 csstratware.json
 
-## Logs / debug scratch
+## Logs
 *.log
 debug-*.log
 
-## UnrealPak (extract locally; zip optional — not required in git)
+## UnrealPak (extract locally; keep zip optional)
 tools/UnrealPak/
 assets/UnrealPak/
-
 
 ## Agent / Cursor local
 .agents/
 skills-lock.json
 
-## Icarus / UE inspect scratch (pulled JSON dumps)
+## Scratch
 .tmp-*/
 .tmp-*
-
-## Accidental source dumps
+extracted/
+.extracted/
 src/code.txt
 
-## Test / coverage output (keep tests/ source in git)
+## Test output
 TestResults/
 coverage/
 *.trx
 
-## NuGet
-packages/
-*.nupkg
-
-## Mod dev scratch
-mods/**/work/
-mods/**/dist/
-mods/**/.cache/
+## Mod scratch
+examples/**/dist/
+examples/**/.cache/
