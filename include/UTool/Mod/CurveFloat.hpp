@@ -26,6 +26,7 @@ class CurveEditor {
   [[nodiscard]] CurveKey lastKey() const;
   void addKey(float time, float value);
   void setKey(float time, float value) { addKey(time, value); }
+  void scaleValues(float factor);
 
  private:
   std::string assetName_;

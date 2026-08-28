@@ -9,7 +9,7 @@ Version **0.2.0**.
 ```text
 include/UTool/   public headers (Core, Pak, Mod, Lua, Cli)
 src/             implementation
-examples/        sample mods (250cap, morexp, example-mod)
+examples/        sample mods (250cap, morexp, affliction_chance)
 assets/          UnrealPak.zip / extracted toolchain
 docs/            guides
 ```
@@ -38,30 +38,47 @@ utool --version
 
 ## Quick start
 
-1. Copy `utool.json.example` → `utool.json` and set game pak paths.
-2. Ensure `assets/UnrealPak.zip` is present (auto-extracts on first pack).
-3. Write a mod with `mod.json` + `scripts/*.lua` (+ optional `patches/`, `content/`).
-4. Run:
+Step-by-step guides: **[docs/README.md](docs/README.md)** (01 install → 08 Pak Studio).
+
+```powershell
+Copy-Item utool.json.example utool.json   # edit game paths
+utool check Icarus
+utool pak build-mod examples/morexp --force-extract
+```
+
+## Pak debugger (browse / preview)
+
+List, search, preview, and extract assets from game paks without bulk extraction:
 
 ```text
-utool discover <mods-dir>
-utool validate <mods-dir>
-utool pak build-mod <mod-dir>
+utool pak list @paks --ext json --json
+utool pak search CharacterGrowth --from Icarus --json
+utool pak preview Data/Character/D_CharacterGrowth.json --from @data --json
+utool pak snippet Data/Character/D_CharacterGrowth.json --from @data --row Player --field MaxDisplayLevel
 ```
+
+Desktop UI: [tools/PakStudio](tools/PakStudio) (Next.js). Pick a game from `utool.json` or scan an install folder. VS Code: **UTool: Browse Game Paks**.
 
 ## Lua API
 
-See **[docs/lua.md](docs/lua.md)** for the full surface (`utool.patch_asset` / `utool.patch_curve`, `utool.editor`, `utool.curve`).
+See **[docs/05-lua-modding.md](docs/05-lua-modding.md)** and **[docs/07-multi-variant-mods.md](docs/07-multi-variant-mods.md)** (`:Value`, `:zip`).
+Find game tables: **[docs/04-find-assets.md](docs/04-find-assets.md)**.
 
 ```lua
-utool.patch_curve("C_PlayerExperienceGrowth", "Data/Character", function()
-  local last = utool.curve:LastKey()
-  utool.curve:AddKey(last.Time + 1, last.Value + 144000)
-end)
+utool.mod {
+  id = "icarus.example",
+  name = "Example",
+  pak = {
+    output = "dist/example_P.pak",
+    mountPoint = "../../../Icarus/Content/",
+    sourcePak = "@data",
+  },
+}
 
-utool.patch_asset("D_CharacterGrowth.json", function()
-  utool.editor:SetOnArrayElementsWhere("/Rows", "Name", "Player", "/MaxDisplayLevel", 250)
-end)
+utool.asset("D_AfflictionChance.json")
+  :row("Underground_Escalation")
+  :field("ChanceInPercent")
+  :set(0)
 ```
 
-Samples: [examples/250cap](examples/250cap), [examples/morexp](examples/morexp). Workspace guide: [docs/UTOOL-WORKSPACE-GUIDE.md](docs/UTOOL-WORKSPACE-GUIDE.md).
+Samples: [examples/250cap](examples/250cap), [examples/morexp](examples/morexp), [examples/affliction_chance](examples/affliction_chance), [examples/freshrations](examples/freshrations), [examples/beasttamer](examples/beasttamer).

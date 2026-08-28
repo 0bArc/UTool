@@ -17,6 +17,10 @@ struct PrepareOptions {
   bool preserveSourcePaths = false;
   bool forceExtract = false;
   Pak::UnrealPakOptions unrealPak;
+  /// When set, apply that pak.create variant on top of base field sets.
+  std::optional<std::size_t> pakVariantIndex;
+  /// Mount point used for packing; bare asset paths stay flat unless this is Content root.
+  std::string mountPoint;
 };
 
 struct PrepareResult {
@@ -32,6 +36,12 @@ struct BuildModResult {
   std::filesystem::path outputPak;
 };
 
+struct DeployModResult {
+  bool ok = false;
+  std::string message;
+  std::filesystem::path pakDest;
+};
+
 [[nodiscard]] PrepareResult prepareMod(
     const Core::ModPackage& package,
     const Core::Config& config,
@@ -44,6 +54,10 @@ struct BuildModResult {
     const std::optional<std::string>& mountOverride = std::nullopt,
     bool compress = false,
     bool forceExtract = false);
+
+[[nodiscard]] DeployModResult deployMod(
+    const Core::ModPackage& package,
+    const Core::Config& config);
 
 [[nodiscard]] std::filesystem::path mergeForPack(
     const Core::ModPackage& package,

@@ -543,6 +543,11 @@ void CurveEditor::addKey(float time, float value) {
   keys_.push_back(CurveKey{time, value});
 }
 
+void CurveEditor::scaleValues(float factor) {
+  for (auto& key : keys_)
+    key.value *= factor;
+}
+
 std::vector<CurveKey> readCurveKeysFromJson(const nlohmann::json& root) {
   std::vector<UAssetApiKeyRef> api;
   // const_cast for collector that mutates structure identically for walk — use const walk

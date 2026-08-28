@@ -53,6 +53,11 @@ assets/UnrealPak/
 .agents/
 skills-lock.json
 
+## Pak Studio (Next.js)
+tools/PakStudio/node_modules/
+tools/PakStudio/.next/
+tools/PakStudio/pipelines/user.json
+
 ## Scratch
 .tmp-*/
 .tmp-*
@@ -68,3 +73,9 @@ coverage/
 ## Mod scratch
 examples/**/dist/
 examples/**/.cache/
+examples/.cache/
+examples/extracted-tmp/
+examples/**/*.zip
+examples/**/*.pak
+examples/**/*.uasset
+examples/**/*.uexp

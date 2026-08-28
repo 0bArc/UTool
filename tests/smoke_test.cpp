@@ -1,5 +1,7 @@
 #include "UTool/Mod/CurveFloat.hpp"
 #include "UTool/Mod/JsonEditor.hpp"
+#include "UTool/Core/GameCheck.hpp"
+#include "UTool/Core/ModSetup.hpp"
 
 #include <cassert>
 #include <iostream>
@@ -26,6 +28,29 @@ int main() {
         R"({"A":1})",
         nlohmann::json::parse(R"([{"op":"replace","path":"/A","value":2}])"));
     assert(patched.find('2') != std::string::npos);
+  }
+
+  {
+    using namespace UTool::Core;
+    assert(looksLikeFilesystemTarget(R"(D:\Games\Icarus)"));
+    assert(looksLikeFilesystemTarget("Content/Paks"));
+    assert(!looksLikeFilesystemTarget("Icarus"));
+
+    Config cfg;
+    cfg.configDirectory = std::filesystem::current_path();
+    cfg.games["TestGame"] = GameSettings{
+        .paksDir = std::string("missing/paks"),
+        .dataPak = std::string("missing/data.pak"),
+    };
+    const auto report = checkConfiguredGame(cfg, "TestGame", cfg.games.at("TestGame"));
+    assert(report.level == SupportLevel::Unsupported);
+  }
+
+  {
+    using namespace UTool::Core;
+    Config cfg;
+    const auto setup = generateModSetup(cfg, "NoSuchGame");
+    assert(!setup.viable);
   }
 
   std::cout << "utool_tests ok\n";

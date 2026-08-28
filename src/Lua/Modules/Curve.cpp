@@ -22,7 +22,8 @@ void registerCurve(sol::state& lua, ScriptRegistrations& regs) {
       sol::property([](const Mod::CurveEditor& e) { return e.assetName(); }),
       "LastKey", &Mod::CurveEditor::lastKey,
       "AddKey", &Mod::CurveEditor::addKey,
-      "SetKey", &Mod::CurveEditor::setKey);
+      "SetKey", &Mod::CurveEditor::setKey,
+      "ScaleValues", &Mod::CurveEditor::scaleValues);
 
   auto curveFnKeep = detail::makeFunctionKeep(lua, "__utool_curve_fns");
   sol::table utool = lua["utool"];

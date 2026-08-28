@@ -16,6 +16,13 @@ struct ToolchainPaths {
 struct UnrealPakOptions {
   std::optional<std::filesystem::path> executablePath;
   std::optional<std::filesystem::path> engineDir;
+  std::optional<std::filesystem::path> cryptoKeysPath;
+};
+
+struct UnrealPakCaptureResult {
+  int exitCode = -1;
+  std::string stdoutText;
+  std::string stderrText;
 };
 
 [[nodiscard]] std::optional<std::filesystem::path> tryFindRepoRoot(
@@ -33,6 +40,10 @@ struct UnrealPakOptions {
 
 [[nodiscard]] std::filesystem::path resolveExecutable(const UnrealPakOptions& options = {});
 
+[[nodiscard]] UnrealPakCaptureResult runUnrealPakCapture(
+    const std::vector<std::wstring>& args,
+    const UnrealPakOptions& options = {});
+
 void extract(
     const std::filesystem::path& pakPath,
     const std::filesystem::path& outputDirectory,
@@ -47,5 +58,13 @@ void packDirectory(
     const UnrealPakOptions& options = {});
 
 [[nodiscard]] UnrealPakOptions toOptions(const ToolchainPaths& paths);
+
+[[nodiscard]] bool tryListPak(
+    const std::filesystem::path& pakPath,
+    const UnrealPakOptions& options = {});
+
+[[nodiscard]] UnrealPakCaptureResult listPakCapture(
+    const std::filesystem::path& pakPath,
+    const UnrealPakOptions& options = {});
 
 }  // namespace UTool::Pak

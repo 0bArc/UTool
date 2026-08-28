@@ -1,0 +1,8 @@
+{
+    "Lua.workspace.library": [
+        "c:\\Users\\sandk\\.cursor\\extensions\\utool.utool-0.1.0\\stubs"
+    ],
+    "Lua.diagnostics.globals": [
+        "utool"
+    ]
+}

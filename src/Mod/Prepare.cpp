@@ -1,15 +1,24 @@
 #include "UTool/Mod/Prepare.hpp"
 
+#include "UTool/Core/Config.hpp"
+#include "UTool/Core/ModSetup.hpp"
 #include "UTool/Lua/Host.hpp"
 #include "UTool/Mod/JsonEditor.hpp"
+#include "UTool/Pak/Inventory.hpp"
 #include "UTool/Pak/UnrealPak.hpp"
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
+#include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <iostream>
+#include <optional>
 #include <sstream>
+#include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace UTool::Mod {
 namespace {
@@ -57,6 +66,53 @@ bool iequals(std::string_view a, std::string_view b) {
       return false;
   }
   return true;
+}
+
+void zipPakFile(const std::filesystem::path& zipPath, const std::filesystem::path& pakPath) {
+  if (!std::filesystem::is_regular_file(pakPath))
+    throw std::runtime_error("Cannot zip missing pak: " + pakPath.string());
+  std::filesystem::create_directories(zipPath.parent_path());
+  if (std::filesystem::exists(zipPath))
+    std::filesystem::remove(zipPath);
+
+  // tar is far faster than spinning up PowerShell Compress-Archive per file.
+  const std::string cmd = "tar -a -cf \"" + zipPath.string() + "\" -C \"" +
+                          pakPath.parent_path().string() + "\" \"" +
+                          pakPath.filename().string() + "\"";
+  const int code = std::system(cmd.c_str());
+  if (code != 0 || !std::filesystem::is_regular_file(zipPath))
+    throw std::runtime_error("Failed to create zip: " + zipPath.string());
+}
+
+std::filesystem::path resolveZipPath(
+    const std::filesystem::path& pakPath,
+    const Lua::PakVariant& variant,
+    const Core::ModPackage& package,
+    const std::optional<std::string>& updateVersion) {
+  if (!variant.zipTemplate || variant.zipTemplate->empty()) {
+    auto zip = pakPath;
+    zip.replace_extension(".zip");
+    return zip;
+  }
+
+  std::string templ = *variant.zipTemplate;
+  std::string expanded = Lua::expandOutputTemplate(templ, updateVersion, variant.valueNumber);
+  for (char& c : expanded) {
+    if (c == '\\')
+      c = '/';
+  }
+
+  std::filesystem::path zip(expanded);
+  if (!zip.is_absolute()) {
+    if (expanded.find('/') == std::string::npos)
+      zip = pakPath.parent_path() / zip.filename();
+    else
+      zip = package.rootPath / zip;
+  }
+  if (!iequals(zip.extension().string(), ".zip"))
+    zip += ".zip";
+  std::filesystem::create_directories(zip.parent_path());
+  return zip.lexically_normal();
 }
 
 std::string sanitizePakName(std::string id) {
@@ -118,8 +174,13 @@ std::filesystem::path extractAssetViaUnrealPak(
 
   if (auto found = findExtractedAsset(pullDir, assetFileName))
     return *found;
-  throw std::runtime_error("UnrealPak extract did not produce " + assetFileName + " from " +
-                           pakPath.string());
+
+  const auto stem = std::filesystem::path(assetFileName).stem().string();
+  throw std::runtime_error(
+      "UnrealPak extract did not produce " + assetFileName + " from " + pakPath.string() +
+      ". Verify the asset exists (`utool pak search " + stem +
+      " --from @data`), confirm pak.sourcePak / games.*.dataPak, and that AES crypto is "
+      "configured if the pak is encrypted.");
 }
 
 using PatchMap = std::unordered_map<std::string, nlohmann::json>;
@@ -157,8 +218,16 @@ PatchMap loadJsonPatches(const Core::ModPackage& package) {
 
 std::vector<std::filesystem::path> collectScripts(const Core::ModPackage& package) {
   std::vector<std::filesystem::path> scripts;
-  for (const auto& rel : package.manifest.scripts)
-    scripts.push_back(package.rootPath / rel);
+  const auto luaManifest = package.rootPath / Core::ModManifest::LuaManifestFileName;
+  if (std::filesystem::is_regular_file(luaManifest))
+    scripts.push_back(luaManifest);
+
+  for (const auto& rel : package.manifest.scripts) {
+    const auto path = package.rootPath / rel;
+    if (!scripts.empty() && path.lexically_normal() == scripts.front().lexically_normal())
+      continue;
+    scripts.push_back(path);
+  }
 
   if (!scripts.empty())
     return scripts;
@@ -175,6 +244,65 @@ std::vector<std::filesystem::path> collectScripts(const Core::ModPackage& packag
   std::sort(scripts.begin(), scripts.end());
   return scripts;
 }
+
+bool isContentRootMount(std::string mount) {
+  for (char& c : mount) {
+    if (c == '\\')
+      c = '/';
+  }
+  while (!mount.empty() && mount.back() == '/')
+    mount.pop_back();
+  if (mount.size() < 7)
+    return false;
+  return iequals(mount.substr(mount.size() - 7), "Content");
+}
+
+std::string relativeDirFromExtractedPath(
+    const std::filesystem::path& found,
+    const std::filesystem::path& pullRoot) {
+  auto parent = std::filesystem::relative(found.parent_path(), pullRoot).generic_string();
+  for (char& c : parent) {
+    if (c == '\\')
+      c = '/';
+  }
+  if (parent == "." || parent.empty())
+    return {};
+  if (parent.rfind("data/", 0) == 0 || parent.rfind("Data/", 0) == 0)
+    return parent;
+  return "data/" + parent;
+}
+
+std::string resolveAssetRelativeDirectory(
+    const std::string& assetFile,
+    const std::string& hintedRelative,
+    const Core::ModPackage& package,
+    const PrepareOptions& options) {
+  if (!hintedRelative.empty())
+    return hintedRelative;
+
+  // Mount already under Content/.../Character (etc.): keep prepared files flat.
+  if (!isContentRootMount(options.mountPoint))
+    return {};
+
+  if (options.extractedDir) {
+    if (auto found = findExtractedAsset(*options.extractedDir, assetFile)) {
+      auto rel = relativeDirFromExtractedPath(*found, *options.extractedDir);
+      if (!rel.empty())
+        return rel;
+    }
+  }
+
+  if (options.sourcePak) {
+    const auto pullDir =
+        package.rootPath / ".cache" / "ue-extract" / std::filesystem::path(assetFile).stem();
+    const auto found =
+        extractAssetViaUnrealPak(*options.sourcePak, assetFile, pullDir, options.unrealPak);
+    return relativeDirFromExtractedPath(found, pullDir);
+  }
+
+  return {};
+}
+
 
 }  // namespace
 
@@ -219,8 +347,9 @@ std::filesystem::path mergeForPack(
 
 PrepareResult prepareMod(
     const Core::ModPackage& package,
-    const Core::Config& /*config*/,
+    const Core::Config& config,
     const PrepareOptions& options) {
+  (void)config;
   PrepareResult result;
   const auto preparedRoot = package.rootPath / ".cache" / "prepared";
   if (std::filesystem::exists(preparedRoot))
@@ -239,6 +368,22 @@ PrepareResult prepareMod(
     for (const auto& assetReg : regs.assets) {
       if (!jsonPatches.contains(assetReg.assetFileName))
         jsonPatches[assetReg.assetFileName] = nlohmann::json::array();
+    }
+    for (const auto& fieldSet : regs.fieldSets) {
+      if (!jsonPatches.contains(fieldSet.assetFileName))
+        jsonPatches[fieldSet.assetFileName] = nlohmann::json::array();
+    }
+    if (options.pakVariantIndex) {
+      if (*options.pakVariantIndex >= regs.pakVariants.size())
+        throw std::runtime_error("Invalid pak variant index");
+      const auto& variant = regs.pakVariants[*options.pakVariantIndex];
+      if (variant.assetApply) {
+        if (!jsonPatches.contains(variant.assetFileName))
+          jsonPatches[variant.assetFileName] = nlohmann::json::array();
+      } else if (!variant.mutation.assetFileName.empty()) {
+        if (!jsonPatches.contains(variant.mutation.assetFileName))
+          jsonPatches[variant.mutation.assetFileName] = nlohmann::json::array();
+      }
     }
 
     for (const auto& [assetFile, ops] : jsonPatches) {
@@ -271,14 +416,60 @@ PrepareResult prepareMod(
         current = editor.toJson(true);
       }
 
-      std::filesystem::path target = preparedRoot / assetFile;
+      for (const auto& fieldSet : regs.fieldSets) {
+        if (!iequals(fieldSet.assetFileName, assetFile))
+          continue;
+        JsonAssetEditor editor(current);
+        Lua::applyFieldMutation(editor, fieldSet);
+        current = editor.toJson(true);
+      }
+
+      if (options.pakVariantIndex) {
+        const auto& variant = regs.pakVariants[*options.pakVariantIndex];
+        if (variant.assetApply && iequals(variant.assetFileName, assetFile)) {
+          JsonAssetEditor editor(current);
+          variant.assetApply(editor);
+          current = editor.toJson(true);
+        } else if (!variant.mutation.assetFileName.empty() &&
+                   iequals(variant.mutation.assetFileName, assetFile)) {
+          JsonAssetEditor editor(current);
+          Lua::applyFieldMutation(editor, variant.mutation);
+          current = editor.toJson(true);
+        }
+      }
+
+      std::string relativeDir;
       for (const auto& assetReg : regs.assets) {
         if (!iequals(assetReg.assetFileName, assetFile))
           continue;
-        if (!assetReg.relativeDirectory.empty())
-          target = preparedRoot / assetReg.relativeDirectory / assetFile;
-        break;
+        if (!assetReg.relativeDirectory.empty()) {
+          relativeDir = assetReg.relativeDirectory;
+          break;
+        }
       }
+      if (relativeDir.empty()) {
+        for (const auto& fieldSet : regs.fieldSets) {
+          if (!iequals(fieldSet.assetFileName, assetFile))
+            continue;
+          if (!fieldSet.relativeDirectory.empty()) {
+            relativeDir = fieldSet.relativeDirectory;
+            break;
+          }
+        }
+      }
+      if (relativeDir.empty() && options.pakVariantIndex) {
+        const auto& variant = regs.pakVariants[*options.pakVariantIndex];
+        if (variant.assetApply && iequals(variant.assetFileName, assetFile))
+          relativeDir = variant.relativeDirectory;
+        else if (iequals(variant.mutation.assetFileName, assetFile))
+          relativeDir = variant.mutation.relativeDirectory;
+      }
+      relativeDir =
+          resolveAssetRelativeDirectory(assetFile, relativeDir, package, options);
+
+      std::filesystem::path target = preparedRoot / assetFile;
+      if (!relativeDir.empty())
+        target = preparedRoot / relativeDir / assetFile;
       writeText(target, current);
       result.preparedFiles.push_back(target);
       std::cout << "prepared: " << target.string() << '\n';
@@ -331,7 +522,29 @@ PrepareResult prepareMod(
       spec.assetName = curveReg.assetName;
       spec.relativeDirectory = curveReg.relativeDirectory;
       spec.extendFromVanilla = curveReg.extendFromVanilla;
-      if (!vanillaKeys.empty()) {
+
+      auto findValueAt = [](const std::vector<CurveKey>& keys, float time) -> std::optional<float> {
+        for (const auto& k : keys) {
+          if (std::fabs(k.time - time) < 1e-4f)
+            return k.value;
+        }
+        return std::nullopt;
+      };
+
+      bool mutatedVanilla = false;
+      for (const auto& vk : vanillaKeys) {
+        const auto edited = findValueAt(editor.keys(), vk.time);
+        if (!edited || std::fabs(*edited - vk.value) > 1e-3f) {
+          mutatedVanilla = true;
+          break;
+        }
+      }
+
+      if (mutatedVanilla || !curveReg.extendFromVanilla || vanillaKeys.empty()) {
+        spec.extendFromVanilla = false;
+        spec.minPatchTime = std::nullopt;
+        spec.keys = editor.keys();
+      } else {
         const float vanillaMax =
             std::max_element(vanillaKeys.begin(), vanillaKeys.end(),
                              [](const CurveKey& a, const CurveKey& b) { return a.time < b.time; })
@@ -341,13 +554,14 @@ PrepareResult prepareMod(
           if (k.time > vanillaMax + 1e-4f)
             spec.keys.push_back(k);
         }
-      } else {
-        spec.keys = editor.keys();
       }
 
-      const auto outRoot = options.preserveSourcePaths
-                               ? preparedRoot / std::filesystem::path(curveReg.relativeDirectory)
-                               : preparedRoot;
+      const bool nestUnderRelative =
+          !curveReg.relativeDirectory.empty() &&
+          (options.preserveSourcePaths || isContentRootMount(options.mountPoint));
+      const auto outRoot =
+          nestUnderRelative ? preparedRoot / std::filesystem::path(curveReg.relativeDirectory)
+                            : preparedRoot;
       std::filesystem::create_directories(outRoot);
       const auto outUasset = outRoot / assetFile;
       copyFile(cachedUasset, outUasset);
@@ -395,9 +609,12 @@ PrepareResult prepareMod(
           copyFile(foundUexp, cacheDir / (std::filesystem::path(assetFile).stem().string() + ".uexp"));
       }
 
-      const auto outRoot = options.preserveSourcePaths
-                               ? preparedRoot / std::filesystem::path(spec.relativeDirectory)
-                               : preparedRoot;
+      const bool nestUnderRelative =
+          !spec.relativeDirectory.empty() &&
+          (options.preserveSourcePaths || isContentRootMount(options.mountPoint));
+      const auto outRoot =
+          nestUnderRelative ? preparedRoot / std::filesystem::path(spec.relativeDirectory)
+                            : preparedRoot;
       std::filesystem::create_directories(outRoot);
       const auto outUasset = outRoot / assetFile;
       copyFile(cachedUasset, outUasset);
@@ -409,6 +626,7 @@ PrepareResult prepareMod(
       result.preparedFiles.push_back(outUasset);
       std::cout << "curve prepared: " << outUasset.string() << '\n';
     }
+
 
     result.ok = true;
     result.preparedContentDir = preparedRoot;
@@ -432,27 +650,18 @@ BuildModResult buildMod(
     std::optional<std::string> gameId =
         package.manifest.target ? package.manifest.target->gameId : std::nullopt;
 
-    std::filesystem::path output;
-    if (outputOverride)
-      output = *outputOverride;
-    else if (package.manifest.pak && package.manifest.pak->output)
-      output = package.rootPath / *package.manifest.pak->output;
-    else
-      output = package.rootPath / "dist" / (sanitizePakName(package.manifest.id) + "_P.pak");
-
-    if (!output.is_absolute())
-      output = package.rootPath / output;
+    auto isAutoMount = [](std::string_view value) {
+      return value.empty() || value == "@auto";
+    };
 
     std::string mount;
-    if (mountOverride)
+    if (mountOverride && !isAutoMount(*mountOverride))
       mount = *mountOverride;
-    else if (package.manifest.pak && package.manifest.pak->mountPoint)
+    else if (package.manifest.pak && package.manifest.pak->mountPoint &&
+             !isAutoMount(*package.manifest.pak->mountPoint) && !mountOverride)
       mount = *package.manifest.pak->mountPoint;
-    else if (auto m = config.resolveMountPoint(gameId))
-      mount = *m;
     else
-      throw std::runtime_error(
-          "Mount point required: mod.json pak.mountPoint, --mount, or defaultMountPoint.");
+      mount = Core::resolveAutoMountPoint(config, gameId);
 
     const bool useUePack = (package.manifest.pak && package.manifest.pak->useUnrealPak) ||
                            (package.manifest.pak && package.manifest.pak->sourcePak) || true;
@@ -463,19 +672,27 @@ BuildModResult buildMod(
     const bool hasJsonCurves =
         std::filesystem::is_directory(curvesDir) &&
         std::filesystem::directory_iterator(curvesDir) != std::filesystem::directory_iterator{};
+
+    Lua::ScriptRegistrations regs;
+    if (!scripts.empty())
+      regs = Lua::loadModScripts(scripts);
+
     const bool shouldPrepare =
         !package.manifest.patchFiles.empty() || !scripts.empty() || hasJsonCurves;
 
-    std::filesystem::path contentRoot;
-    if (shouldPrepare) {
+    const auto updateVersion = package.manifest.updateVersion;
+    const bool multiVariant = !regs.pakVariants.empty() && !outputOverride;
+
+    const auto pakCtx = Pak::makeResolveContext(config, gameId);
+
+    auto buildPrepareOptions = [&](std::optional<std::size_t> variantIndex) {
       PrepareOptions opts;
       opts.forceExtract = forceExtract;
       opts.preserveSourcePaths = shouldPreserveSourcePaths(mount);
       opts.extractedDir = config.resolveExistingExtractedDir();
-
-      const auto toolchain = Pak::resolveToolchain(config.unrealPak, config.unrealEngineDir,
-                                                   config.configDirectory, true);
-      opts.unrealPak = Pak::toOptions(toolchain);
+      opts.pakVariantIndex = variantIndex;
+      opts.mountPoint = mount;
+      opts.unrealPak = pakCtx.unrealPak;
 
       std::optional<std::string> sourceToken =
           package.manifest.pak ? package.manifest.pak->sourcePak : std::nullopt;
@@ -491,23 +708,77 @@ BuildModResult buildMod(
               : std::string("@paks");
       if (!scripts.empty() || hasJsonCurves)
         opts.curveSourcePaks = config.resolveSourcePakPaths(curveToken, gameId);
+      return opts;
+    };
 
-      auto prepared = prepareMod(package, config, opts);
-      if (!prepared.ok)
-        throw std::runtime_error(prepared.message);
-      contentRoot = mergeForPack(package, prepared.preparedContentDir);
+    auto resolveOutputPath = [&](std::optional<std::int64_t> valueNumber) {
+      std::filesystem::path output;
+      if (outputOverride) {
+        output = *outputOverride;
+      } else if (package.manifest.pak && package.manifest.pak->output) {
+        const auto expanded =
+            Lua::expandOutputTemplate(*package.manifest.pak->output, updateVersion, valueNumber);
+        output = package.rootPath / expanded;
+      } else {
+        output = package.rootPath / "dist" / (sanitizePakName(package.manifest.id) + "_P.pak");
+      }
+      if (!output.is_absolute())
+        output = package.rootPath / output;
+      return std::filesystem::weakly_canonical(ensurePatchPakName(output, gameId));
+    };
+
+    auto packOnce = [&](std::optional<std::size_t> variantIndex,
+                        std::optional<std::int64_t> valueNumber) {
+      std::filesystem::path contentRoot;
+      if (shouldPrepare) {
+        auto prepared = prepareMod(package, config, buildPrepareOptions(variantIndex));
+        if (!prepared.ok)
+          throw std::runtime_error(prepared.message);
+        contentRoot = mergeForPack(package, prepared.preparedContentDir);
+      } else {
+        contentRoot = mergeForPack(package, package.rootPath / ".cache" / "prepared");
+      }
+
+      auto output = resolveOutputPath(valueNumber);
+      std::filesystem::create_directories(output.parent_path());
+
+      if (useUePack) {
+        Pak::packDirectory(contentRoot, output, mount, compress, pakCtx.unrealPak);
+        std::cout << "Built mod pak (UnrealPak): " << output.string() << '\n';
+      }
+      return output;
+    };
+
+    std::filesystem::path lastOutput;
+
+    auto zipAndRemovePak = [&](const Lua::PakVariant& variant, const std::filesystem::path& pakPath) {
+      if (!variant.zip)
+        return;
+      const auto zipPath = resolveZipPath(pakPath, variant, package, updateVersion);
+      zipPakFile(zipPath, pakPath);
+      std::error_code ec;
+      std::filesystem::remove(pakPath, ec);
+      std::cout << "Zipped: " << zipPath.string() << '\n';
+    };
+
+    if (multiVariant) {
+      for (std::size_t i = 0; i < regs.pakVariants.size(); ++i) {
+        lastOutput = packOnce(i, regs.pakVariants[i].valueNumber);
+        zipAndRemovePak(regs.pakVariants[i], lastOutput);
+        if (regs.pakVariants[i].zip) {
+          auto z = resolveZipPath(lastOutput, regs.pakVariants[i], package, updateVersion);
+          lastOutput = z;
+        }
+      }
     } else {
-      contentRoot = mergeForPack(package, package.rootPath / ".cache" / "prepared");
-    }
-
-    output = std::filesystem::weakly_canonical(ensurePatchPakName(output, gameId));
-    std::filesystem::create_directories(output.parent_path());
-
-    if (useUePack) {
-      const auto toolchain = Pak::resolveToolchain(config.unrealPak, config.unrealEngineDir,
-                                                   config.configDirectory, true);
-      Pak::packDirectory(contentRoot, output, mount, compress, Pak::toOptions(toolchain));
-      std::cout << "Built mod pak (UnrealPak): " << output.string() << '\n';
+      lastOutput = packOnce(std::nullopt, std::nullopt);
+      if (package.manifest.pak && package.manifest.pak->zip) {
+        Lua::PakVariant variant;
+        variant.zip = true;
+        variant.zipTemplate = package.manifest.pak->zipTemplate;
+        zipAndRemovePak(variant, lastOutput);
+        lastOutput = resolveZipPath(lastOutput, variant, package, updateVersion);
+      }
     }
 
     const bool keepCache = package.manifest.pak && package.manifest.pak->keepCache;
@@ -518,7 +789,38 @@ BuildModResult buildMod(
     }
 
     result.ok = true;
-    result.outputPak = output;
+    result.outputPak = lastOutput;
+    result.message = "ok";
+
+  } catch (const std::exception& ex) {
+    result.ok = false;
+    result.message = ex.what();
+  }
+  return result;
+}
+
+DeployModResult deployMod(const Core::ModPackage& package, const Core::Config& config) {
+  DeployModResult result;
+  try {
+    std::optional<std::string> gameId =
+        package.manifest.target ? package.manifest.target->gameId : std::nullopt;
+
+    auto built = buildMod(package, config);
+    if (!built.ok)
+      throw std::runtime_error(built.message);
+
+    auto paksOpt = config.resolvePaksDir(gameId);
+    if (!paksOpt)
+      throw std::runtime_error("paksDir not configured for deploy");
+    const auto modsPakDir = *paksOpt / "mods";
+    std::filesystem::create_directories(modsPakDir);
+    const auto pakDest = modsPakDir / built.outputPak.filename();
+    copyFile(built.outputPak, pakDest);
+    result.pakDest = pakDest;
+    std::cout << "Deployed pak: " << pakDest.string() << '\n';
+
+
+    result.ok = true;
     result.message = "ok";
   } catch (const std::exception& ex) {
     result.ok = false;

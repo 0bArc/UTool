@@ -1,7 +1,9 @@
 #include "UTool/Core/Config.hpp"
+#include "UTool/Lua/Host.hpp"
 
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <fstream>
 #include <stdexcept>
 
@@ -102,6 +104,14 @@ ModPakSettings parsePak(const nlohmann::json& j) {
     p.useUnrealPak = j["useUnrealPak"].get<bool>();
   if (j.contains("keepCache") && j["keepCache"].is_boolean())
     p.keepCache = j["keepCache"].get<bool>();
+  if (j.contains("zip")) {
+    if (j["zip"].is_boolean())
+      p.zip = j["zip"].get<bool>();
+    else if (j["zip"].is_string()) {
+      p.zip = true;
+      p.zipTemplate = j["zip"].get<std::string>();
+    }
+  }
   return p;
 }
 
@@ -129,6 +139,9 @@ ModManifest parseManifest(const nlohmann::json& j) {
   m.patchFiles = stringArray(j, "patchFiles");
   m.scripts = stringArray(j, "scripts");
   m.curvePatchesDir = optString(j, "curvePatchesDir");
+  m.updateVersion = optString(j, "updateVersion");
+  if (!m.updateVersion && j.contains("updateVersion") && j["updateVersion"].is_number_integer())
+    m.updateVersion = std::to_string(j["updateVersion"].get<std::int64_t>());
   if (j.contains("pak") && j["pak"].is_object())
     m.pak = parsePak(j["pak"]);
   return m;
@@ -273,15 +286,30 @@ std::vector<std::filesystem::path> Config::resolveSourcePakPaths(
 }
 
 ModPackage loadModPackage(const std::filesystem::path& modDir) {
-  const auto path = modDir / ModManifest::ManifestFileName;
-  if (!std::filesystem::is_regular_file(path))
-    throw std::runtime_error("No mod.json in " + modDir.string());
+  const auto luaPath = modDir / ModManifest::LuaManifestFileName;
+  const auto jsonPath = modDir / ModManifest::ManifestFileName;
 
   ModPackage pkg;
   pkg.rootPath = std::filesystem::weakly_canonical(modDir);
-  pkg.manifest = parseManifest(readJsonFile(path));
+
+  if (std::filesystem::is_regular_file(luaPath)) {
+    auto regs = Lua::loadModScripts({luaPath});
+    if (!regs.modManifest)
+      throw std::runtime_error("mod.lua must call utool.mod { ... }: " + luaPath.string());
+    pkg.manifest = *regs.modManifest;
+    if (pkg.manifest.id.empty() || pkg.manifest.name.empty())
+      throw std::runtime_error("utool.mod requires id and name: " + luaPath.string());
+    if (pkg.manifest.version.empty())
+      pkg.manifest.version = "1.0.0";
+    return pkg;
+  }
+
+  if (!std::filesystem::is_regular_file(jsonPath))
+    throw std::runtime_error("No mod.lua or mod.json in " + modDir.string());
+
+  pkg.manifest = parseManifest(readJsonFile(jsonPath));
   if (pkg.manifest.id.empty() || pkg.manifest.name.empty() || pkg.manifest.version.empty())
-    throw std::runtime_error("mod.json requires id, name, and version: " + path.string());
+    throw std::runtime_error("mod.json requires id, name, and version: " + jsonPath.string());
   return pkg;
 }
 
@@ -290,7 +318,12 @@ std::vector<ModPackage> discoverMods(const std::filesystem::path& modsDir) {
   if (!std::filesystem::is_directory(modsDir))
     return mods;
 
-  if (std::filesystem::is_regular_file(modsDir / ModManifest::ManifestFileName)) {
+  const auto hasManifest = [](const std::filesystem::path& dir) {
+    return std::filesystem::is_regular_file(dir / ModManifest::LuaManifestFileName) ||
+           std::filesystem::is_regular_file(dir / ModManifest::ManifestFileName);
+  };
+
+  if (hasManifest(modsDir)) {
     mods.push_back(loadModPackage(modsDir));
     return mods;
   }
@@ -298,7 +331,7 @@ std::vector<ModPackage> discoverMods(const std::filesystem::path& modsDir) {
   for (const auto& entry : std::filesystem::directory_iterator(modsDir)) {
     if (!entry.is_directory())
       continue;
-    if (!std::filesystem::is_regular_file(entry.path() / ModManifest::ManifestFileName))
+    if (!hasManifest(entry.path()))
       continue;
     try {
       mods.push_back(loadModPackage(entry.path()));

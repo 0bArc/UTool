@@ -74,56 +74,6 @@ std::vector<std::filesystem::path> enumerateStoreRoots(const std::filesystem::pa
   return roots;
 }
 
-void runUnrealPak(const std::vector<std::wstring>& args, const UnrealPakOptions& options) {
-  const auto exe = resolveExecutable(options);
-  std::wstring cmdLine = L"\"" + exe.wstring() + L"\"";
-  for (const auto& a : args) {
-    cmdLine.push_back(L' ');
-    cmdLine += a;
-  }
-  if (options.engineDir) {
-    cmdLine += L" -enginedir=\"";
-    cmdLine += options.engineDir->wstring();
-    cmdLine += L"\"";
-  }
-
-#ifdef _WIN32
-  std::vector<wchar_t> mutableCmd(cmdLine.begin(), cmdLine.end());
-  mutableCmd.push_back(L'\0');
-
-  STARTUPINFOW si{};
-  si.cb = sizeof(si);
-  PROCESS_INFORMATION pi{};
-  const BOOL ok = CreateProcessW(
-      exe.wstring().c_str(),
-      mutableCmd.data(),
-      nullptr,
-      nullptr,
-      FALSE,
-      0,
-      nullptr,
-      nullptr,
-      &si,
-      &pi);
-  if (!ok) {
-    throw std::runtime_error(
-        "CreateProcess UnrealPak failed (" + std::to_string(GetLastError()) + "): " +
-        exe.string());
-  }
-  WaitForSingleObject(pi.hProcess, INFINITE);
-  DWORD code = 1;
-  GetExitCodeProcess(pi.hProcess, &code);
-  CloseHandle(pi.hThread);
-  CloseHandle(pi.hProcess);
-  if (code != 0) {
-    std::string narrow(cmdLine.begin(), cmdLine.end());
-    throw std::runtime_error("UnrealPak failed (" + std::to_string(code) + "): " + narrow);
-  }
-#else
-  throw std::runtime_error("UnrealPak spawn not implemented on this platform");
-#endif
-}
-
 std::wstring q(const std::filesystem::path& path) {
   return L"\"" + path.wstring() + L"\"";
 }
@@ -160,6 +110,144 @@ std::filesystem::path writeCreateResponseFile(
   if (count == 0)
     throw std::runtime_error("No files under " + contentDirectory.string());
   return responseFilePath;
+}
+
+[[nodiscard]] UnrealPakCaptureResult runUnrealPakCaptureImpl(
+    const std::vector<std::wstring>& args,
+    const UnrealPakOptions& options,
+    bool discardOutput) {
+  UnrealPakCaptureResult result;
+  const auto exe = resolveExecutable(options);
+  std::wstring cmdLine = L"\"" + exe.wstring() + L"\"";
+  for (const auto& a : args) {
+    cmdLine.push_back(L' ');
+    cmdLine += a;
+  }
+  if (options.engineDir) {
+    cmdLine += L" -enginedir=\"";
+    cmdLine += options.engineDir->wstring();
+    cmdLine += L"\"";
+  }
+  if (options.cryptoKeysPath) {
+    cmdLine += L" -cryptokeys=\"";
+    cmdLine += options.cryptoKeysPath->wstring();
+    cmdLine += L"\"";
+  }
+
+#ifdef _WIN32
+  std::vector<wchar_t> mutableCmd(cmdLine.begin(), cmdLine.end());
+  mutableCmd.push_back(L'\0');
+
+  SECURITY_ATTRIBUTES sa{};
+  sa.nLength = sizeof(sa);
+  sa.bInheritHandle = TRUE;
+
+  HANDLE readOut = INVALID_HANDLE_VALUE;
+  HANDLE writeOut = INVALID_HANDLE_VALUE;
+  HANDLE readErr = INVALID_HANDLE_VALUE;
+  HANDLE writeErr = INVALID_HANDLE_VALUE;
+
+  if (!discardOutput) {
+    CreatePipe(&readOut, &writeOut, &sa, 0);
+    CreatePipe(&readErr, &writeErr, &sa, 0);
+    SetHandleInformation(readOut, HANDLE_FLAG_INHERIT, 0);
+    SetHandleInformation(readErr, HANDLE_FLAG_INHERIT, 0);
+  }
+
+  STARTUPINFOW si{};
+  si.cb = sizeof(si);
+  HANDLE nullOut = INVALID_HANDLE_VALUE;
+  if (discardOutput) {
+    si.dwFlags = STARTF_USESTDHANDLES;
+    si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+    nullOut = CreateFileW(L"NUL", GENERIC_WRITE, FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
+                          FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (nullOut != INVALID_HANDLE_VALUE) {
+      si.hStdOutput = nullOut;
+      si.hStdError = nullOut;
+    }
+  } else {
+    si.dwFlags = STARTF_USESTDHANDLES;
+    si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+    si.hStdOutput = writeOut;
+    si.hStdError = writeErr;
+  }
+
+  PROCESS_INFORMATION pi{};
+  const BOOL ok = CreateProcessW(
+      exe.wstring().c_str(),
+      mutableCmd.data(),
+      nullptr,
+      nullptr,
+      TRUE,
+      0,
+      nullptr,
+      nullptr,
+      &si,
+      &pi);
+  if (!ok) {
+    if (readOut != INVALID_HANDLE_VALUE)
+      CloseHandle(readOut);
+    if (writeOut != INVALID_HANDLE_VALUE)
+      CloseHandle(writeOut);
+    if (readErr != INVALID_HANDLE_VALUE)
+      CloseHandle(readErr);
+    if (writeErr != INVALID_HANDLE_VALUE)
+      CloseHandle(writeErr);
+    throw std::runtime_error(
+        "CreateProcess UnrealPak failed (" + std::to_string(GetLastError()) + "): " +
+        exe.string());
+  }
+
+  if (!discardOutput) {
+    CloseHandle(writeOut);
+    CloseHandle(writeErr);
+  }
+
+  auto drain = [](HANDLE pipe, std::string& out) {
+    if (pipe == INVALID_HANDLE_VALUE)
+      return;
+    char buffer[4096];
+    DWORD read = 0;
+    while (ReadFile(pipe, buffer, sizeof(buffer), &read, nullptr) && read > 0)
+      out.append(buffer, buffer + read);
+    CloseHandle(pipe);
+  };
+
+  if (!discardOutput) {
+    drain(readOut, result.stdoutText);
+    drain(readErr, result.stderrText);
+  }
+
+  WaitForSingleObject(pi.hProcess, INFINITE);
+  DWORD code = 1;
+  GetExitCodeProcess(pi.hProcess, &code);
+  CloseHandle(pi.hThread);
+  CloseHandle(pi.hProcess);
+  if (nullOut != INVALID_HANDLE_VALUE)
+    CloseHandle(nullOut);
+  result.exitCode = static_cast<int>(code);
+  return result;
+#else
+  (void)args;
+  (void)options;
+  (void)discardOutput;
+  return result;
+#endif
+}
+
+[[nodiscard]] int runUnrealPakExitCode(
+    const std::vector<std::wstring>& args,
+    const UnrealPakOptions& options,
+    bool quiet = false) {
+  return runUnrealPakCaptureImpl(args, options, quiet).exitCode;
+}
+
+void runUnrealPak(const std::vector<std::wstring>& args, const UnrealPakOptions& options) {
+  if (runUnrealPakExitCode(args, options) != 0) {
+    const auto exe = resolveExecutable(options);
+    throw std::runtime_error("UnrealPak failed: " + exe.string());
+  }
 }
 
 }  // namespace
@@ -299,6 +387,29 @@ void packDirectory(
   }
   std::error_code ec;
   std::filesystem::remove(response, ec);
+}
+
+bool tryListPak(const std::filesystem::path& pakPath, const UnrealPakOptions& options) {
+  return listPakCapture(pakPath, options).exitCode == 0;
+}
+
+UnrealPakCaptureResult runUnrealPakCapture(
+    const std::vector<std::wstring>& args,
+    const UnrealPakOptions& options) {
+  return runUnrealPakCaptureImpl(args, options, false);
+}
+
+UnrealPakCaptureResult listPakCapture(
+    const std::filesystem::path& pakPath,
+    const UnrealPakOptions& options) {
+  std::error_code ec;
+  if (!std::filesystem::is_regular_file(pakPath, ec))
+    return UnrealPakCaptureResult{.exitCode = 1};
+  const std::vector<std::wstring> args = {
+      L"\"" + std::filesystem::weakly_canonical(pakPath).wstring() + L"\"",
+      L"-List",
+  };
+  return runUnrealPakCapture(args, options);
 }
 
 }  // namespace UTool::Pak

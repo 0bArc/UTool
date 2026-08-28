@@ -97,7 +97,15 @@ FetchContent_MakeAvailable(sol2)
 
 add_library(utool_lib STATIC
   src/Core/Config.cpp
+  src/Core/GameCheck.cpp
+  src/Core/ModSetup.cpp
   src/Pak/UnrealPak.cpp
+  src/Pak/UnrealPakListParser.cpp
+  src/Pak/Crypto.cpp
+  src/Pak/Inventory.cpp
+  src/Pak/AssetPreview.cpp
+  src/Pak/OpenCache.cpp
+  src/Pak/StringIndex.cpp
   src/Mod/Prepare.cpp
   src/Mod/CurveFloat.cpp
   src/Mod/JsonEditor.cpp
@@ -106,6 +114,7 @@ add_library(utool_lib STATIC
   src/Lua/Modules/Registry.cpp
   src/Lua/Modules/Curve.cpp
   src/Lua/Modules/Asset.cpp
+  src/Lua/Modules/Data.cpp
   src/Cli/Commands.cpp
 )
 

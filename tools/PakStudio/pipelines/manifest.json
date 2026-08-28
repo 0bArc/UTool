@@ -1,0 +1,8 @@
+{
+  "pipelines": [
+    { "id": "250cap", "path": "../../../examples/250cap" },
+    { "id": "morexp", "path": "../../../examples/morexp" },
+    { "id": "affliction_chance", "path": "../../../examples/affliction_chance" },
+    { "id": "example-mod", "path": "../../../examples/example-mod" }
+  ]
+}

@@ -71,6 +71,8 @@ struct ModPakSettings {
   std::optional<std::string> sourceFilter;
   bool useUnrealPak = false;
   bool keepCache = false;
+  bool zip = false;
+  std::optional<std::string> zipTemplate;
 };
 
 struct Ue4Target {
@@ -83,12 +85,14 @@ struct Ue4Target {
 struct ModManifest {
   static constexpr int SchemaVersion = 1;
   static constexpr const char* ManifestFileName = "mod.json";
+  static constexpr const char* LuaManifestFileName = "mod.lua";
 
   std::string id;
   std::string name;
   std::string version;
   std::optional<std::string> description;
   std::optional<std::string> author;
+  std::optional<std::string> updateVersion;
   std::optional<Ue4Target> target;
   std::vector<std::string> contentRoots{"content"};
   std::vector<std::string> patchFiles;
