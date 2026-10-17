@@ -1,0 +1,88 @@
+# Generated build trees. NMake breaks on '#' in the repo path, so
+# cmake/build-release.cmd writes to %LOCALAPPDATA%\utool-build.
+build/
+**/build/
+F:/Data/personal/utool-build/
+../utool-build/
+
+# CMake output, in-tree or under cmake/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+CMakeUserPresets.json
+compile_commands.json
+_deps/
+**/CMakeCache.txt
+**/CMakeFiles/
+**/cmake_install.cmake
+**/CTestTestfile.cmake
+**/_deps/
+
+# scripts/ (Python helpers). Keep the .py files.
+scripts/**/__pycache__/
+scripts/**/.venv/
+scripts/**/venv/
+**/__pycache__/
+*.pyc
+
+# tests/
+Testing/
+tests/Testing/
+TestResults/
+coverage/
+*.trx
+
+# assets/ — UnrealPak is Epic licensed. Keep assets/README.md only.
+assets/UnrealPak/
+assets/UnrealPak.zip
+tools/UnrealPak/
+
+# Personal mods. Stay on disk, never in git.
+examples/
+
+# Local config and secrets
+.env
+*.local.json
+secrets.json
+utool.json
+csstratware.json
+
+# Retired GUI and local dumps
+tools/PakStudio/
+archive/
+.inspect/
+.firecrawl/
+.cache/
+
+# Editor and agent
+.vs/
+.idea/
+.cursor/
+.agents/
+skills-lock.json
+*.user
+*.suo
+*.swp
+*~
+
+# Binaries and logs
+bin/
+obj/
+out/
+dist/
+*.dll
+*.exe
+*.pdb
+*.cache
+*.log
+debug-*.log
+
+# OS and scratch
+Thumbs.db
+.DS_Store
+.tmp-*/
+.tmp-*
+extracted/
+.extracted/
+src/code.txt

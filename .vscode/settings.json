@@ -1,0 +1,46 @@
+{
+    "Lua.workspace.library": [
+        "c:\\Users\\sandk\\.cursor\\extensions\\utool.utool-0.1.0\\stubs"
+    ],
+    "Lua.diagnostics.globals": [
+        "utool"
+    ],
+
+    "files.exclude": {
+        "**/.agents": true,
+        "**/.cache": true,
+        "**/.cursor": true,
+        "**/.firecrawl": true,
+        "**/.inspect": true,
+        "**/.git": true,
+        "archive": true,
+        "build": true,
+        "assets/UnrealPak": true,
+        "assets/UnrealPak.zip": true,
+        "**/.extracted": true,
+        "**/dist": true,
+        "examples/**/.cache": true
+    },
+
+    "search.exclude": {
+        "**/.agents": true,
+        "**/.cache": true,
+        "**/.firecrawl": true,
+        "**/.inspect": true,
+        "assets/UnrealPak": true,
+        "assets/UnrealPak.zip": true,
+        "**/dist": true,
+        "examples/**/.cache": true,
+        "**/.extracted": true
+    },
+
+    "files.watcherExclude": {
+        "**/.agents/**": true,
+        "**/.cache/**": true,
+        "**/.firecrawl/**": true,
+        "**/.inspect/**": true,
+        "**/assets/UnrealPak/**": true,
+        "**/examples/**/dist/**": true,
+        "**/examples/**/.cache/**": true
+    }
+}

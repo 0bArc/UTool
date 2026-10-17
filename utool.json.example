@@ -1,0 +1,36 @@
+{
+  "updateVersion": "1",
+  "extractedDir": ".extracted",
+  "pakAesKey": "64_HEX_CHARS_OR_BASE64_AES_256_KEY",
+  "defaultMountPoint": "../../../Icarus/Content/",
+  "games": {
+    "Icarus": {
+      "paksDir": "D:\\SteamLibrary\\steamapps\\common\\Icarus\\Icarus\\Content\\Paks",
+      "dataPak": "D:\\SteamLibrary\\steamapps\\common\\Icarus\\Icarus\\Content\\Data\\data.pak",
+      "playerDataDir": "C:\\Users\\you\\AppData\\Local\\Icarus\\Saved\\PlayerData"
+    }
+  },
+  "nexus": {
+    "gameDomain": "icarus",
+    "apiKeyEnv": "NEXUSMODS_API_KEY",
+    "files": [
+      {
+        "id": "morexp-2x",
+        "modId": 0,
+        "fileId": 0,
+        "match": "MoreXP-Week-*_2x.zip",
+        "displayName": "MoreXP-Week-%updateversion%_2x.zip",
+        "category": "main",
+        "archiveExisting": true
+      }
+    ]
+  },
+  "catalog": [
+    {
+      "id": "morexp",
+      "path": "progression/morexp",
+      "category": "progression",
+      "ship": false
+    }
+  ]
+}

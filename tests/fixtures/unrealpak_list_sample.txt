@@ -1,0 +1,3 @@
+LogPakFile: Display: Mount point ../../../PenDriverPro/Content/
+LogPakFile: Display: "Data/Character/D_CharacterGrowth.json" offset: 0, size: 4096 bytes, sha1: ABCD, compression: None.
+LogPakFile: Display: "Data/Character/C_PlayerXP.uasset" offset: 4096, size: 2048 bytes, sha1: EFGH, compression: Zlib.
