@@ -1,4 +1,7 @@
 #include "UTool/Mod/Prepare.hpp"
+#include "UTool/Core/StringUtil.hpp"
+
+#include "UTool/Core/Process.hpp"
 
 #include "UTool/Core/Config.hpp"
 #include "UTool/Core/ModSetup.hpp"
@@ -21,6 +24,7 @@
 #include <unordered_set>
 
 namespace UTool::Mod {
+using Core::iequals;
 namespace {
 
 std::string readText(const std::filesystem::path& path) {
@@ -57,17 +61,6 @@ void copyTree(const std::filesystem::path& source, const std::filesystem::path& 
   }
 }
 
-bool iequals(std::string_view a, std::string_view b) {
-  if (a.size() != b.size())
-    return false;
-  for (size_t i = 0; i < a.size(); ++i) {
-    if (std::tolower(static_cast<unsigned char>(a[i])) !=
-        std::tolower(static_cast<unsigned char>(b[i])))
-      return false;
-  }
-  return true;
-}
-
 void zipPakFile(const std::filesystem::path& zipPath, const std::filesystem::path& pakPath) {
   if (!std::filesystem::is_regular_file(pakPath))
     throw std::runtime_error("Cannot zip missing pak: " + pakPath.string());
@@ -75,12 +68,10 @@ void zipPakFile(const std::filesystem::path& zipPath, const std::filesystem::pat
   if (std::filesystem::exists(zipPath))
     std::filesystem::remove(zipPath);
 
-  // tar is far faster than spinning up PowerShell Compress-Archive per file.
-  const std::string cmd = "tar -a -cf \"" + zipPath.string() + "\" -C \"" +
-                          pakPath.parent_path().string() + "\" \"" +
-                          pakPath.filename().string() + "\"";
-  const int code = std::system(cmd.c_str());
-  if (code != 0 || !std::filesystem::is_regular_file(zipPath))
+  const auto zipped = Core::runProcess(
+      L"tar", {L"-a", L"-cf", zipPath.wstring(), L"-C", pakPath.parent_path().wstring(),
+               pakPath.filename().wstring()});
+  if (!zipped.launched || zipped.exitCode != 0 || !std::filesystem::is_regular_file(zipPath))
     throw std::runtime_error("Failed to create zip: " + zipPath.string());
 }
 
@@ -509,7 +500,7 @@ PrepareResult prepareMod(
                 std::filesystem::path(assetFile).stem();
             found = extractAssetViaUnrealPak(pak, assetFile, pullDir, options.unrealPak);
             break;
-          } catch (...) {
+          } catch (const std::exception&) {
             // try next pak
           }
         }
@@ -604,7 +595,7 @@ PrepareResult prepareMod(
                 std::filesystem::path(assetFile).stem();
             found = extractAssetViaUnrealPak(pak, assetFile, pullDir, options.unrealPak);
             break;
-          } catch (...) {
+          } catch (const std::exception&) {
           }
         }
         if (found.empty())
@@ -672,8 +663,9 @@ BuildModResult buildMod(
     else
       mount = Core::resolveAutoMountPoint(config, gameId);
 
-    const bool useUePack = (package.manifest.pak && package.manifest.pak->useUnrealPak) ||
-                           (package.manifest.pak && package.manifest.pak->sourcePak) || true;
+    if (package.manifest.pak && !package.manifest.pak->useUnrealPak)
+      throw std::runtime_error(
+          "pak.useUnrealPak is false; UTool only packs with UnrealPak");
 
     const auto scripts = collectScripts(package);
     const auto curvesDir =
@@ -752,10 +744,8 @@ BuildModResult buildMod(
       auto output = resolveOutputPath(valueNumber);
       std::filesystem::create_directories(output.parent_path());
 
-      if (useUePack) {
-        Pak::packDirectory(contentRoot, output, mount, compress, pakCtx.unrealPak);
-        std::cout << "Built mod pak (UnrealPak): " << output.string() << '\n';
-      }
+      Pak::packDirectory(contentRoot, output, mount, compress, pakCtx.unrealPak);
+      std::cout << "Built mod pak (UnrealPak): " << output.string() << '\n';
       return output;
     };
 

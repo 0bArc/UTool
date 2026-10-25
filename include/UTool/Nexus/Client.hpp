@@ -6,7 +6,10 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
+
+#include <nlohmann/json.hpp>
 
 namespace UTool::Nexus {
 
@@ -100,5 +103,19 @@ struct ValidateResult {
 
 /// Persist nexus.modId / nexus.files[].fileId back into utool.json.
 void writeConfigNexusIds(Core::Config& config, const Core::NexusSettings& settings);
+
+/// Lowercase, drop a trailing .zip, and strip a "week" plus up to four digits.
+[[nodiscard]] std::string normalizeNexusFileKey(std::string_view name);
+
+/// Match key for a manifest file entry (display name, else match glob).
+[[nodiscard]] std::string nexusWantKey(const Core::NexusFileEntry& entry);
+
+/// 100 exact main, 70 near-exact main, 0 when tier tokens (250/500/mount) disagree.
+[[nodiscard]] int scoreNexusFileMatch(std::string_view wantKey, const RemoteModFile& remote);
+
+/// One v3 mod_files[] object. Inactive files and empty names yield nullopt.
+/// `version`, when set, supplies name, category, and version.
+[[nodiscard]] std::optional<RemoteModFile> parseV3ModFile(const nlohmann::json& file,
+                                                          const nlohmann::json* version);
 
 }  // namespace UTool::Nexus

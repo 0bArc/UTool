@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Configure
-        run: cmake -S . -B build
+        run: cmake -S . -B build -DUTOOL_WARNINGS_AS_ERRORS=ON
       - name: Build
         run: cmake --build build --config Release
       - name: Test

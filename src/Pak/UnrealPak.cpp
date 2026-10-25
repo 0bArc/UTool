@@ -1,5 +1,7 @@
 #include "UTool/Pak/UnrealPak.hpp"
 
+#include "UTool/Core/Process.hpp"
+
 #include "UTool/Core/Config.hpp"
 
 #include <chrono>
@@ -273,11 +275,10 @@ bool tryEnsureExtracted(const std::filesystem::path& configDirectory, bool force
     return true;
 
   std::filesystem::create_directories(*repo / "assets");
-  const std::string cmd =
-      "powershell -NoProfile -Command \"Expand-Archive -LiteralPath '" + zipPath.string() +
-      "' -DestinationPath '" + (*repo / "assets").string() + "' -Force\"";
-  const int code = std::system(cmd.c_str());
-  return code == 0 && std::filesystem::is_regular_file(exe);
+  const auto extractedZip = Core::runProcess(
+      L"tar", {L"-xf", zipPath.wstring(), L"-C", (*repo / "assets").wstring()});
+  return extractedZip.launched && extractedZip.exitCode == 0 &&
+         std::filesystem::is_regular_file(exe);
 }
 
 std::filesystem::path resolveExecutable(const UnrealPakOptions& options) {
@@ -313,8 +314,8 @@ ToolchainPaths resolveToolchain(
     const std::optional<std::string>& configEngineDir,
     const std::filesystem::path& configDirectory,
     bool ensureLocalCopy) {
-  if (ensureLocalCopy)
-    tryEnsureExtracted(configDirectory);
+  [[maybe_unused]] const bool extracted =
+      !ensureLocalCopy || tryEnsureExtracted(configDirectory);
 
   for (const auto& store : enumerateStoreRoots(configDirectory)) {
     ToolchainPaths paths;
@@ -374,19 +375,18 @@ void packDirectory(
       std::filesystem::temp_directory_path() /
       ("utool-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) +
        ".txt");
-  try {
-    writeCreateResponseFile(contentDirectory, mountPoint, response);
-    std::vector<std::wstring> args = {q(out), L"-Create=" + q(response)};
-    if (compress)
-      args.emplace_back(L"-compress");
-    runUnrealPak(args, options);
-  } catch (...) {
-    std::error_code ec;
-    std::filesystem::remove(response, ec);
-    throw;
-  }
-  std::error_code ec;
-  std::filesystem::remove(response, ec);
+  struct ResponseFile {
+    std::filesystem::path path;
+    ~ResponseFile() {
+      std::error_code ec;
+      std::filesystem::remove(path, ec);
+    }
+  } guard{response};
+  writeCreateResponseFile(contentDirectory, mountPoint, response);
+  std::vector<std::wstring> args = {q(out), L"-Create=" + q(response)};
+  if (compress)
+    args.emplace_back(L"-compress");
+  runUnrealPak(args, options);
 }
 
 bool tryListPak(const std::filesystem::path& pakPath, const UnrealPakOptions& options) {

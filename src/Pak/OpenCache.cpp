@@ -74,7 +74,7 @@ nlohmann::json loadMeta() {
     if (!doc.contains("totalSize"))
       doc["totalSize"] = 0;
     return doc;
-  } catch (...) {
+  } catch (const nlohmann::json::exception&) {
     return nlohmann::json{{"entries", nlohmann::json::array()}, {"totalSize", 0}};
   }
 }

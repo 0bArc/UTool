@@ -1,4 +1,5 @@
 #include "UTool/Lua/Host.hpp"
+#include "UTool/Core/StringUtil.hpp"
 
 #include "Modules/Registry.hpp"
 
@@ -11,18 +12,8 @@
 #include <string_view>
 
 namespace UTool::Lua {
+using Core::iequals;
 namespace {
-
-bool iequals(std::string_view a, std::string_view b) {
-  if (a.size() != b.size())
-    return false;
-  for (size_t i = 0; i < a.size(); ++i) {
-    if (std::tolower(static_cast<unsigned char>(a[i])) !=
-        std::tolower(static_cast<unsigned char>(b[i])))
-      return false;
-  }
-  return true;
-}
 
 bool hasVariantPlaceholder(std::string_view templ) {
   if (templ.find("%d") != std::string::npos)

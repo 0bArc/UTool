@@ -9,11 +9,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# MSVC: consistent runtime + UTF-8 source
-if(MSVC)
-  add_compile_options(/W4 /permissive- /utf-8 /Zc:__cplusplus)
-  add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
-endif()
+include(cmake/CompilerWarnings.cmake)
 
 include(FetchContent)
 
@@ -101,6 +97,8 @@ add_library(utool_lib STATIC
   src/Core/GameCheck.cpp
   src/Core/ModSetup.cpp
   src/Core/NewMod.cpp
+  src/Core/Process.cpp
+  src/Core/StringUtil.cpp
   src/Pak/UnrealPak.cpp
   src/Pak/UnrealPakListParser.cpp
   src/Pak/Crypto.cpp
@@ -118,6 +116,12 @@ add_library(utool_lib STATIC
   src/Lua/Modules/Curve.cpp
   src/Lua/Modules/Asset.cpp
   src/Lua/Modules/Data.cpp
+  src/Cli/CliUtil.cpp
+  src/Cli/CheckCommands.cpp
+  src/Cli/GamesCommands.cpp
+  src/Cli/PakCommands.cpp
+  src/Cli/ModCommands.cpp
+  src/Cli/ShipCommands.cpp
   src/Cli/Commands.cpp
   src/Cli/Interactive.cpp
 )
@@ -138,6 +142,8 @@ if(WIN32)
   target_link_libraries(utool_lib PUBLIC winhttp)
 endif()
 
+utool_set_warnings(utool_lib)
+
 # --- utool (CLI executable) -------------------------------------------------
 
 add_executable(utool
@@ -148,6 +154,8 @@ target_link_libraries(utool
   PRIVATE
     utool_lib
 )
+
+utool_set_warnings(utool)
 
 # --- utool_tests ------------------------------------------------------------
 

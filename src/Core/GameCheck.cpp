@@ -1,4 +1,5 @@
 #include "UTool/Core/GameCheck.hpp"
+#include "UTool/Core/StringUtil.hpp"
 
 #include "UTool/Pak/UnrealPak.hpp"
 
@@ -10,24 +11,6 @@
 
 namespace UTool::Core {
 namespace {
-
-bool iequals(std::string_view a, std::string_view b) {
-  if (a.size() != b.size())
-    return false;
-  for (size_t i = 0; i < a.size(); ++i) {
-    if (std::tolower(static_cast<unsigned char>(a[i])) !=
-        std::tolower(static_cast<unsigned char>(b[i])))
-      return false;
-  }
-  return true;
-}
-
-std::string toLower(std::string s) {
-  std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) {
-    return static_cast<char>(std::tolower(c));
-  });
-  return s;
-}
 
 std::string statusLabel(CheckLine::Status status) {
   switch (status) {
@@ -213,7 +196,7 @@ void appendPartialDetails(
     const auto toolchain = Pak::resolveToolchain(
         config.unrealPak, config.unrealEngineDir, config.configDirectory, false);
     pakOptions = Pak::toOptions(toolchain);
-  } catch (...) {
+  } catch (const std::exception&) {
   }
 
   if (pakOptions && !paks.empty()) {
@@ -267,7 +250,7 @@ void appendConfiguredPartialDetails(
       for (const auto& pak : listPakEntries(dir))
         addDetail(report, CheckLine::Status::Info,
                   "  pak: " + pak.path.filename().string() + " (" + formatBytes(pak.bytes) + ")");
-    } catch (...) {
+    } catch (const std::exception&) {
     }
   }
 
@@ -287,7 +270,7 @@ void appendConfiguredPartialDetails(
         }
         paksReadable = Pak::tryListPak(testPak->path, opts);
       }
-    } catch (...) {
+    } catch (const std::exception&) {
     }
   }
 
@@ -474,7 +457,7 @@ std::optional<std::string> findConfigGameIdForPaths(
         const auto configured = config.resolvePath(*settings.paksDir);
         if (probe.paksDir && pathEquivalent(configured, *probe.paksDir))
           return id;
-      } catch (...) {
+      } catch (const std::exception&) {
       }
     }
     if (settings.dataPak) {
@@ -482,7 +465,7 @@ std::optional<std::string> findConfigGameIdForPaths(
         const auto configured = config.resolvePath(*settings.dataPak);
         if (probe.dataPak && pathEquivalent(configured, *probe.dataPak))
           return id;
-      } catch (...) {
+      } catch (const std::exception&) {
       }
     }
   }

@@ -1,4 +1,5 @@
 #include "UTool/Core/ModSetup.hpp"
+#include "UTool/Core/StringUtil.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -8,24 +9,6 @@
 
 namespace UTool::Core {
 namespace {
-
-bool iequals(std::string_view a, std::string_view b) {
-  if (a.size() != b.size())
-    return false;
-  for (size_t i = 0; i < a.size(); ++i) {
-    if (std::tolower(static_cast<unsigned char>(a[i])) !=
-        std::tolower(static_cast<unsigned char>(b[i])))
-      return false;
-  }
-  return true;
-}
-
-std::string toLower(std::string s) {
-  std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) {
-    return static_cast<char>(std::tolower(c));
-  });
-  return s;
-}
 
 std::string slugToken(std::string_view input) {
   std::string out;
@@ -183,7 +166,7 @@ ProbedInstall probeFromConfig(const Config& config, std::string_view gameId) {
         }
         probe.installRoot = probe.paksDir->parent_path().parent_path().parent_path();
       }
-    } catch (...) {
+    } catch (const std::exception&) {
     }
   }
 
@@ -192,7 +175,7 @@ ProbedInstall probeFromConfig(const Config& config, std::string_view gameId) {
       const auto path = config.resolvePath(*settings.dataPak);
       if (std::filesystem::is_regular_file(path, ec))
         probe.dataPak = path;
-    } catch (...) {
+    } catch (const std::exception&) {
     }
   } else if (probe.paksDir) {
     const auto derived = probe.paksDir->parent_path().parent_path() / "Data" / "data.pak";

@@ -56,7 +56,9 @@ nlohmann::json* navigate(nlohmann::json& node, const std::string& segment) {
     size_t index = 0;
     try {
       index = static_cast<size_t>(std::stoul(segment));
-    } catch (...) {
+    } catch (const std::invalid_argument&) {
+      return nullptr;
+    } catch (const std::out_of_range&) {
       return nullptr;
     }
     if (index >= node.size())
@@ -108,20 +110,33 @@ void setAtPointer(
     nlohmann::json& root,
     std::string_view pointer,
     const nlohmann::json& value,
-    bool /*replace*/,
+    bool replace,
     bool createMissing) {
   auto [parent, key] = resolveParent(root, pointer, createMissing);
   if (parent->is_object()) {
+    const bool exists = parent->contains(key);
+    if (!exists && replace && !createMissing)
+      throw std::runtime_error("Cannot replace missing path: " + std::string(pointer));
     (*parent)[key] = value;
     return;
   }
   if (parent->is_array()) {
     if (key == "-") {
+      if (replace)
+        throw std::runtime_error("replace does not accept '-'");
       parent->push_back(value);
       return;
     }
     const size_t index = static_cast<size_t>(std::stoul(key));
-    parent->at(index) = value;
+    if (!replace) {
+      if (index > parent->size())
+        throw std::runtime_error("add index out of range: " + std::string(pointer));
+      parent->insert(parent->begin() + static_cast<std::ptrdiff_t>(index), value);
+      return;
+    }
+    if (index >= parent->size())
+      throw std::runtime_error("replace index out of range: " + std::string(pointer));
+    (*parent)[index] = value;
     return;
   }
   throw std::runtime_error("Cannot set value at pointer parent");

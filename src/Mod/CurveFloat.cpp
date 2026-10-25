@@ -1,4 +1,5 @@
 #include "UTool/Mod/CurveFloat.hpp"
+#include "UTool/Core/StringUtil.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -11,18 +12,8 @@
 #include <stdexcept>
 
 namespace UTool::Mod {
+using Core::iequals;
 namespace {
-
-bool iequals(std::string_view a, std::string_view b) {
-  if (a.size() != b.size())
-    return false;
-  for (size_t i = 0; i < a.size(); ++i) {
-    if (std::tolower(static_cast<unsigned char>(a[i])) !=
-        std::tolower(static_cast<unsigned char>(b[i])))
-      return false;
-  }
-  return true;
-}
 
 float parseFloatNode(const nlohmann::json& node) {
   if (node.is_number_float() || node.is_number_integer())

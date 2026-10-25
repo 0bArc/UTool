@@ -1,33 +1,19 @@
 #include "UTool/Core/Config.hpp"
+#include "UTool/Core/StringUtil.hpp"
 #include "UTool/Lua/Host.hpp"
 
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
 #include <fstream>
+#include <iostream>
 #include <iterator>
+#include <optional>
 #include <stdexcept>
+#include <vector>
 
 namespace UTool::Core {
 namespace {
-
-std::string toLower(std::string s) {
-  std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) {
-    return static_cast<char>(std::tolower(c));
-  });
-  return s;
-}
-
-bool iequals(std::string_view a, std::string_view b) {
-  if (a.size() != b.size())
-    return false;
-  for (size_t i = 0; i < a.size(); ++i) {
-    if (std::tolower(static_cast<unsigned char>(a[i])) !=
-        std::tolower(static_cast<unsigned char>(b[i])))
-      return false;
-  }
-  return true;
-}
 
 std::optional<std::string> optString(const nlohmann::json& j, const char* key) {
   if (!j.contains(key) || j[key].is_null())
@@ -242,6 +228,50 @@ nlohmann::json readJsonFile(const std::filesystem::path& path) {
   return j;
 }
 
+std::optional<int> compareDottedVersions(std::string_view a, std::string_view b) {
+  auto parse = [](std::string_view s) -> std::optional<std::vector<int>> {
+    if (s.empty())
+      return std::nullopt;
+    std::vector<int> parts;
+    int current = -1;
+    for (char c : s) {
+      if (c >= '0' && c <= '9') {
+        if (current < 0)
+          current = 0;
+        if (current > 100000000)
+          return std::nullopt;
+        current = current * 10 + (c - '0');
+      } else if (c == '.') {
+        if (current < 0)
+          return std::nullopt;
+        parts.push_back(current);
+        current = -1;
+      } else {
+        return std::nullopt;
+      }
+    }
+    if (current < 0)
+      return std::nullopt;
+    parts.push_back(current);
+    return parts;
+  };
+
+  const auto left = parse(a);
+  const auto right = parse(b);
+  if (!left || !right)
+    return std::nullopt;
+  const size_t n = std::max(left->size(), right->size());
+  for (size_t i = 0; i < n; ++i) {
+    const int av = i < left->size() ? (*left)[i] : 0;
+    const int bv = i < right->size() ? (*right)[i] : 0;
+    if (av < bv)
+      return -1;
+    if (av > bv)
+      return 1;
+  }
+  return 0;
+}
+
 }  // namespace
 
 bool Config::isDataPakAlias(std::string_view token) {
@@ -445,8 +475,8 @@ std::vector<ModPackage> discoverMods(const std::filesystem::path& modsDir) {
       continue;
     try {
       mods.push_back(loadModPackage(it->path()));
-    } catch (...) {
-      // skip invalid
+    } catch (const std::exception& ex) {
+      std::cerr << "skip " << it->path().string() << ": " << ex.what() << '\n';
     }
   }
   std::sort(mods.begin(), mods.end(), [](const ModPackage& a, const ModPackage& b) {
@@ -495,6 +525,15 @@ std::vector<std::string> validateMod(const ModPackage& package) {
   if (package.manifest.pak && package.manifest.pak->mountPoint &&
       package.manifest.pak->mountPoint->empty()) {
     issues.emplace_back("pak.mountPoint is empty");
+  }
+  if (package.manifest.target && package.manifest.target->minGameVersion &&
+      package.manifest.target->maxGameVersion) {
+    const auto order = compareDottedVersions(*package.manifest.target->minGameVersion,
+                                              *package.manifest.target->maxGameVersion);
+    if (!order)
+      issues.emplace_back("target.minGameVersion and maxGameVersion must be dotted numbers");
+    else if (*order > 0)
+      issues.emplace_back("target.minGameVersion is greater than maxGameVersion");
   }
   return issues;
 }

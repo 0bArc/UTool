@@ -1,4 +1,5 @@
 #include "PakInternal.hpp"
+#include "UTool/Core/StringUtil.hpp"
 
 #include "UTool/Pak/UnrealPak.hpp"
 
@@ -11,15 +12,8 @@
 #include <stdexcept>
 
 namespace UTool::Pak {
+using Core::trim;
 namespace {
-
-std::string trim(std::string_view s) {
-  while (!s.empty() && std::isspace(static_cast<unsigned char>(s.front())))
-    s.remove_prefix(1);
-  while (!s.empty() && std::isspace(static_cast<unsigned char>(s.back())))
-    s.remove_suffix(1);
-  return std::string(s);
-}
 
 std::optional<std::string> envVar(const char* name) {
   if (const char* v = std::getenv(name); v && *v)

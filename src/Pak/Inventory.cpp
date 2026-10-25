@@ -1,4 +1,5 @@
 #include "UTool/Pak/Inventory.hpp"
+#include "UTool/Core/StringUtil.hpp"
 
 #include "PakInternal.hpp"
 #include "UTool/Core/GameCheck.hpp"
@@ -12,24 +13,9 @@
 #include <stdexcept>
 
 namespace UTool::Pak {
+using Core::iequals;
+using Core::toLower;
 namespace {
-
-std::string lower(std::string s) {
-  std::transform(s.begin(), s.end(), s.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  return s;
-}
-
-bool iequals(std::string_view a, std::string_view b) {
-  if (a.size() != b.size())
-    return false;
-  for (size_t i = 0; i < a.size(); ++i) {
-    if (std::tolower(static_cast<unsigned char>(a[i])) !=
-        std::tolower(static_cast<unsigned char>(b[i])))
-      return false;
-  }
-  return true;
-}
 
 std::string cacheKeyForPak(
     const std::filesystem::path& pakPath,
@@ -122,7 +108,7 @@ std::optional<std::vector<PakFileEntry>> loadPakCache(
   nlohmann::json doc;
   try {
     in >> doc;
-  } catch (...) {
+  } catch (const nlohmann::json::exception&) {
     return std::nullopt;
   }
 
@@ -209,7 +195,7 @@ std::vector<std::filesystem::path> collectPakFiles(const std::filesystem::path& 
     return paks;
 
   const auto maybeAddPak = [&](const std::filesystem::path& path) {
-    if (lower(path.extension().string()) == ".pak")
+    if (toLower(path.extension().string()) == ".pak")
       paks.push_back(path);
   };
 
@@ -275,7 +261,7 @@ ResolvedSource resolveSourceSpec(
   std::error_code ec;
 
   const auto asPath = std::filesystem::path(spec);
-  if (std::filesystem::is_regular_file(asPath, ec) && lower(asPath.extension().string()) == ".pak") {
+  if (std::filesystem::is_regular_file(asPath, ec) && toLower(asPath.extension().string()) == ".pak") {
     return ResolvedSource{
         .label = asPath.filename().string(),
         .pakPaths = {std::filesystem::weakly_canonical(asPath, ec)},
@@ -408,13 +394,13 @@ std::vector<PakFileEntry> searchInventory(
     const PakInventory& inventory,
     std::string_view query,
     std::optional<std::string_view> extFilter) {
-  const std::string q = lower(std::string(query));
+  const std::string q = toLower(std::string(query));
   std::vector<PakFileEntry> out;
   for (const auto& entry : inventory.entries) {
-    if (extFilter && !extFilter->empty() && entry.extension != lower(std::string(*extFilter)))
+    if (extFilter && !extFilter->empty() && entry.extension != toLower(std::string(*extFilter)))
       continue;
-    const std::string pathLower = lower(entry.virtualPath);
-    const std::string pakLower = lower(entry.sourcePak);
+    const std::string pathLower = toLower(entry.virtualPath);
+    const std::string pakLower = toLower(entry.sourcePak);
     if (pathLower.find(q) != std::string::npos || pakLower.find(q) != std::string::npos)
       out.push_back(entry);
   }
@@ -432,7 +418,7 @@ std::vector<PakFileEntry> searchInventoryInside(
 std::vector<PakFileEntry> filterInventoryByExtension(
     const PakInventory& inventory,
     std::string_view extFilter) {
-  const std::string ext = lower(std::string(extFilter));
+  const std::string ext = toLower(std::string(extFilter));
   std::vector<PakFileEntry> out;
   for (const auto& entry : inventory.entries) {
     if (entry.extension == ext)

@@ -151,7 +151,7 @@ AssetPreview previewFromExtracted(
       const auto keys = Mod::readCurveKeys(extracted);
       if (!keys.empty())
         return previewCurveFile(extracted, entry);
-    } catch (...) {
+    } catch (const std::exception&) {
     }
     return previewBinaryFile(extracted, entry);
   }

@@ -3,6 +3,7 @@
 #include "UTool/Cli/Commands.hpp"
 #include "UTool/Core/Config.hpp"
 #include "UTool/Core/NewMod.hpp"
+#include "UTool/Core/Process.hpp"
 #include "UTool/Version.hpp"
 
 #include <cctype>
@@ -625,15 +626,16 @@ int runModSession(const fs::path& modDir, const std::string& catalogIdIn) {
           paintErr(std::cout, linked.message + "\n");
         else
           paint(std::cout, "\033[32m", linked.message + "\n");
-      } catch (...) {
+      } catch (const std::exception&) {
         paintErr(std::cout, "Bad Nexus mod id\n");
       }
       continue;
     }
     if (args[0] == "open") {
 #ifdef _WIN32
-      const std::string cmd = "explorer \"" + modDir.string() + "\"";
-      std::system(cmd.c_str());
+      const auto opened = Core::runProcess(L"explorer.exe", {modDir.wstring()});
+      if (!opened.launched)
+        paintErr(std::cout, "Could not open " + modDir.string() + "\n");
 #else
       std::cout << modDir.string() << '\n';
 #endif
@@ -764,7 +766,7 @@ int runNewModWizard(const fs::path& modsDir) {
         } else {
           paint(std::cout, "\033[32m", linked.message + "\n");
         }
-      } catch (...) {
+      } catch (const std::exception&) {
         paintErr(std::cout, "Bad Nexus mod id\n");
         return 1;
       }
@@ -834,7 +836,7 @@ int runNewModWizard(const fs::path& modsDir) {
     if (!nexusStr.empty()) {
       try {
         req.nexusModId = std::stoll(nexusStr);
-      } catch (...) {
+      } catch (const std::exception&) {
         paintErr(std::cout, "Bad Nexus mod id\n");
         return 1;
       }

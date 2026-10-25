@@ -1,22 +1,11 @@
 #include "PakInternal.hpp"
+#include "UTool/Core/StringUtil.hpp"
 
 #include <algorithm>
 #include <cctype>
 #include <regex>
 
 namespace UTool::Pak {
-
-namespace {
-
-std::string trim(std::string_view s) {
-  while (!s.empty() && std::isspace(static_cast<unsigned char>(s.front())))
-    s.remove_prefix(1);
-  while (!s.empty() && std::isspace(static_cast<unsigned char>(s.back())))
-    s.remove_suffix(1);
-  return std::string(s);
-}
-
-}  // namespace
 
 std::vector<ParsedListEntry> parsePakListOutput(std::string_view output) {
   static const std::regex lineRe(

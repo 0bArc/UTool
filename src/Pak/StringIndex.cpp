@@ -1,5 +1,6 @@
 #include "UTool/Pak/StringIndex.hpp"
 
+#include "UTool/Core/StringUtil.hpp"
 #include "UTool/Pak/OpenCache.hpp"
 #include "PakInternal.hpp"
 
@@ -13,12 +14,7 @@
 
 namespace UTool::Pak {
 namespace {
-
-std::string lower(std::string s) {
-  std::transform(s.begin(), s.end(), s.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  return s;
-}
+using Core::toLower;
 
 std::string hashKey(std::string_view key) {
   std::ostringstream oss;
@@ -61,7 +57,7 @@ nlohmann::json loadIndex(const std::filesystem::path& path) {
     nlohmann::json doc;
     in >> doc;
     return doc;
-  } catch (...) {
+  } catch (const std::exception&) {
     return {};
   }
 }
@@ -119,7 +115,7 @@ void buildIndexForPak(
         arr.push_back(std::move(s));
       files[entry.virtualPath] = std::move(arr);
       std::filesystem::remove_all(scratch, ec);
-    } catch (...) {
+    } catch (const std::exception&) {
       std::error_code ec;
       std::filesystem::remove_all(scratch, ec);
     }
@@ -155,7 +151,7 @@ std::vector<PakFileEntry> searchStringIndexes(
     std::string_view query,
     const UnrealPakOptions& options,
     const std::uint64_t maxFileBytes) {
-  const std::string q = lower(std::string(query));
+  const std::string q = toLower(std::string(query));
   if (q.empty())
     return {};
 
@@ -169,14 +165,14 @@ std::vector<PakFileEntry> searchStringIndexes(
 
     for (auto it = doc["files"].begin(); it != doc["files"].end(); ++it) {
       bool hit = false;
-      const std::string pathLower = lower(it.key());
+      const std::string pathLower = toLower(it.key());
       if (pathLower.find(q) != std::string::npos)
         hit = true;
       if (!hit && it.value().is_array()) {
         for (const auto& s : it.value()) {
           if (!s.is_string())
             continue;
-          if (lower(s.get<std::string>()).find(q) != std::string::npos) {
+          if (toLower(s.get<std::string>()).find(q) != std::string::npos) {
             hit = true;
             break;
           }

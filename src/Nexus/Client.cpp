@@ -1,7 +1,9 @@
 #include "UTool/Nexus/Client.hpp"
 
+#include "UTool/Core/StringUtil.hpp"
 #include "UTool/Lua/Host.hpp"
 
+#include <algorithm>
 #include <cctype>
 #include <chrono>
 #include <cmath>
@@ -327,12 +329,6 @@ UploadResult uploadWindows(const UploadRequest& request, const std::string& apiK
   return result;
 }
 
-std::string toLowerCopy(std::string s) {
-  for (char& c : s)
-    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-  return s;
-}
-
 /// game-scoped mod URL id (e.g. 213) -> v3 mods.id (e.g. 18627273162965)
 std::string resolveV3ModId(const std::string& gameDomain, std::int64_t gameScopedModId,
                            const std::string& apiKey) {
@@ -379,26 +375,21 @@ ListFilesResult listModFilesWindows(const std::string& gameDomain, std::int64_t 
       throw std::runtime_error("unexpected v3 files shape");
 
     for (const auto& f : j["data"]["mod_files"]) {
-      const bool active = f.value("is_active", false);
-      if (!active)
+      if (!f.value("is_active", false))
         continue;
       const auto fileId = parseIdField(f.at("id"));
       if (fileId <= 0)
         continue;
 
-      std::string matchName = f.value("name", "");
-      std::string category = "main";
-      std::string version;
-
+      const nlohmann::json* best = nullptr;
       auto verResp = apiJson("https://api.nexusmods.com/v3",
                              "/mod-files/" + std::to_string(fileId) + "/versions", L"GET", apiKey);
       if (verResp.status >= 200 && verResp.status < 300) {
         auto vj = nlohmann::json::parse(verResp.body);
         if (vj.contains("data") && vj["data"].contains("versions") &&
             vj["data"]["versions"].is_array()) {
-          const nlohmann::json* best = nullptr;
           for (const auto& ver : vj["data"]["versions"]) {
-            const auto cat = toLowerCopy(ver.value("category", ""));
+            const auto cat = Core::toLower(ver.value("category", ""));
             if (ver.value("is_primary", false) || cat == "main") {
               best = &ver;
               break;
@@ -406,21 +397,11 @@ ListFilesResult listModFilesWindows(const std::string& gameDomain, std::int64_t 
             if (!best)
               best = &ver;
           }
-          if (best) {
-            matchName = best->value("name", matchName);
-            category = best->value("category", category);
-            version = best->value("version", "");
-          }
         }
       }
 
-      RemoteModFile rf;
-      rf.fileId = fileId;
-      rf.name = std::move(matchName);
-      rf.category = std::move(category);
-      rf.version = std::move(version);
-      if (!rf.name.empty())
-        result.files.push_back(std::move(rf));
+      if (auto parsed = parseV3ModFile(f, best))
+        result.files.push_back(std::move(*parsed));
     }
     result.ok = true;
     result.message = "ok";
@@ -434,7 +415,7 @@ ListFilesResult listModFilesWindows(const std::string& gameDomain, std::int64_t 
 std::vector<std::int64_t> findModsWindows(const std::string& gameDomain, const std::string& author,
                                           const std::string& apiKey) {
   std::vector<std::int64_t> out;
-  const std::string authorKey = toLowerCopy(author);
+  const std::string authorKey = Core::toLower(author);
   std::set<std::int64_t> seen;
   for (const char* period : {"1d", "1w", "1m"}) {
     const std::string path =
@@ -457,8 +438,8 @@ std::vector<std::int64_t> findModsWindows(const std::string& gameDomain, const s
       if (infoResp.status < 200 || infoResp.status >= 300)
         continue;
       auto info = nlohmann::json::parse(infoResp.body);
-      const std::string uploaded = toLowerCopy(info.value("uploaded_by", ""));
-      const std::string auth = toLowerCopy(info.value("author", ""));
+      const std::string uploaded = Core::toLower(info.value("uploaded_by", ""));
+      const std::string auth = Core::toLower(info.value("author", ""));
       if (uploaded != authorKey && auth != authorKey)
         continue;
       out.push_back(modId);
@@ -472,7 +453,7 @@ std::optional<std::int64_t> findModIdWindows(const std::string& gameDomain,
                                              const std::string& apiKey,
                                              const std::string& nameHint) {
   auto normalize = [](std::string_view name) {
-    std::string s = toLowerCopy(std::string(name));
+    std::string s = Core::toLower(std::string(name));
     std::string out;
     for (char c : s) {
       if (std::isalnum(static_cast<unsigned char>(c)))
@@ -480,7 +461,7 @@ std::optional<std::int64_t> findModIdWindows(const std::string& gameDomain,
     }
     return out;
   };
-  const std::string authorKey = toLowerCopy(author);
+  const std::string authorKey = Core::toLower(author);
   const std::string hintKey = normalize(nameHint);
   std::optional<std::int64_t> bestId;
   int bestScore = 0;
@@ -585,30 +566,29 @@ UploadResult uploadFromManifestFile(
 
 namespace {
 
-std::string toLowerCopyPublic(std::string s) {
-  for (char& c : s)
-    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-  return s;
+bool isMainCategory(std::string_view cat) {
+  const auto c = Core::toLower(std::string(cat));
+  return c == "main" || c.empty();
 }
 
-std::string normalizeFileKey(std::string_view name) {
-  std::string s = toLowerCopyPublic(std::string(name));
+}  // namespace
+
+std::string normalizeNexusFileKey(std::string_view name) {
+  std::string s = Core::toLower(std::string(name));
   if (s.size() > 4 && s.substr(s.size() - 4) == ".zip")
     s.resize(s.size() - 4);
 
-  // Strip "week" + optional separators + up to 4 digits BEFORE dropping
+  // Strip "week" + optional separators + up to 4 digits before dropping
   // non-alnum, so "week 247 1.5x" does not become "week24715" and eat the tier.
   for (;;) {
     const auto w = s.find("week");
     if (w == std::string::npos)
       break;
     std::size_t i = w + 4;
-    while (i < s.size() &&
-           (s[i] == '-' || s[i] == '_' || s[i] == ' ' || s[i] == '.'))
+    while (i < s.size() && (s[i] == '-' || s[i] == '_' || s[i] == ' ' || s[i] == '.'))
       ++i;
     const std::size_t digitStart = i;
-    while (i < s.size() && (i - digitStart) < 4 &&
-           std::isdigit(static_cast<unsigned char>(s[i])))
+    while (i < s.size() && (i - digitStart) < 4 && std::isdigit(static_cast<unsigned char>(s[i])))
       ++i;
     s.erase(w, i - w);
   }
@@ -622,12 +602,7 @@ std::string normalizeFileKey(std::string_view name) {
   return out;
 }
 
-bool isMainCategory(std::string_view cat) {
-  const auto c = toLowerCopyPublic(std::string(cat));
-  return c == "main" || c.empty();
-}
-
-std::string wantKeyFromEntry(const Core::NexusFileEntry& entry) {
+std::string nexusWantKey(const Core::NexusFileEntry& entry) {
   std::string src = entry.displayName.value_or(entry.match);
   auto eraseAll = [&](std::string_view tok) {
     for (;;) {
@@ -639,7 +614,6 @@ std::string wantKeyFromEntry(const Core::NexusFileEntry& entry) {
   };
   eraseAll("%updateversion%");
   eraseAll("%d");
-  // Drop Week token so tier numbers (1.5x, 10%, ...) are not eaten as week ids.
   eraseAll("-Week-");
   eraseAll("_Week_");
   eraseAll("Week-");
@@ -650,25 +624,25 @@ std::string wantKeyFromEntry(const Core::NexusFileEntry& entry) {
     if (c == '*')
       c = ' ';
   }
-  return normalizeFileKey(src);
+  return normalizeNexusFileKey(src);
 }
 
-int matchScore(const std::string& wantKey, const RemoteModFile& remote) {
-  const auto got = normalizeFileKey(remote.name);
+int scoreNexusFileMatch(std::string_view wantKey, const RemoteModFile& remote) {
+  const auto got = normalizeNexusFileKey(remote.name);
   if (wantKey.empty() || got.empty())
     return 0;
 
-  const bool wantMounts = wantKey.find("mount") != std::string::npos;
+  const bool wantMounts = wantKey.find("mount") != std::string_view::npos;
   const bool gotMounts = got.find("mount") != std::string::npos;
   if (wantMounts != gotMounts)
     return 0;
 
-  const bool want500 = wantKey.find("500") != std::string::npos;
+  const bool want500 = wantKey.find("500") != std::string_view::npos;
   const bool got500 = got.find("500") != std::string::npos;
   if (want500 != got500)
     return 0;
 
-  const bool want250 = wantKey.find("250") != std::string::npos;
+  const bool want250 = wantKey.find("250") != std::string_view::npos;
   const bool got250 = got.find("250") != std::string::npos;
   if (want250 != got250)
     return 0;
@@ -676,7 +650,6 @@ int matchScore(const std::string& wantKey, const RemoteModFile& remote) {
   if (wantKey == got)
     return isMainCategory(remote.category) ? 100 : 80;
 
-  // Tight containment only (avoid 5% matching 15%, or shared prefix noise).
   if (wantKey.size() >= 8 && got.size() >= 8) {
     const auto lo = std::min(wantKey.size(), got.size());
     const auto hi = std::max(wantKey.size(), got.size());
@@ -687,7 +660,35 @@ int matchScore(const std::string& wantKey, const RemoteModFile& remote) {
   return 0;
 }
 
-}  // namespace
+std::optional<RemoteModFile> parseV3ModFile(const nlohmann::json& file,
+                                            const nlohmann::json* version) {
+  if (!file.value("is_active", false))
+    return std::nullopt;
+
+  std::int64_t fileId = 0;
+  if (file.contains("id")) {
+    const auto& id = file["id"];
+    if (id.is_string())
+      fileId = std::stoll(id.get<std::string>());
+    else if (id.is_number_integer())
+      fileId = id.get<std::int64_t>();
+  }
+  if (fileId <= 0)
+    return std::nullopt;
+
+  RemoteModFile rf;
+  rf.fileId = fileId;
+  rf.name = file.value("name", "");
+  rf.category = "main";
+  if (version) {
+    rf.name = version->value("name", rf.name);
+    rf.category = version->value("category", rf.category);
+    rf.version = version->value("version", "");
+  }
+  if (rf.name.empty())
+    return std::nullopt;
+  return rf;
+}
 
 ListFilesResult listModFiles(const std::string& gameDomain, std::int64_t modId,
                              const std::string& apiKey) {
@@ -776,7 +777,7 @@ ResolveIdsResult resolveManifestFileIds(Core::NexusSettings& settings, const std
     }
 
     for (auto& entry : settings.files) {
-      const auto want = wantKeyFromEntry(entry);
+      const auto want = nexusWantKey(entry);
       const std::optional<std::int64_t> scope =
           entry.modId ? entry.modId : settings.modId;
 
@@ -788,7 +789,7 @@ ResolveIdsResult resolveManifestFileIds(Core::NexusSettings& settings, const std
         if (scope && *scope > 0 && remote.modId != *scope)
           continue;
         scoped.push_back(&remote);
-        const int score = matchScore(want, remote.file);
+        const int score = scoreNexusFileMatch(want, remote.file);
         if (score > best) {
           best = score;
           bestFileId = remote.file.fileId;

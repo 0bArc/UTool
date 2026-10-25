@@ -1,4 +1,5 @@
 #include "UTool/Core/Env.hpp"
+#include "UTool/Core/StringUtil.hpp"
 
 #include <cstdlib>
 #include <fstream>
@@ -13,14 +14,6 @@
 
 namespace UTool::Core {
 namespace {
-
-std::string trim(std::string_view s) {
-  while (!s.empty() && (s.front() == ' ' || s.front() == '\t' || s.front() == '\r'))
-    s.remove_prefix(1);
-  while (!s.empty() && (s.back() == ' ' || s.back() == '\t' || s.back() == '\r'))
-    s.remove_suffix(1);
-  return std::string(s);
-}
 
 std::string unquote(std::string s) {
   if (s.size() >= 2) {

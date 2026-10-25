@@ -109,7 +109,7 @@ struct ModPakSettings {
   std::optional<std::string> sourcePak;
   std::optional<std::string> curveSourcePak;
   std::optional<std::string> sourceFilter;
-  bool useUnrealPak = false;
+  bool useUnrealPak = true;
   bool keepCache = false;
   bool zip = false;
   std::optional<std::string> zipTemplate;

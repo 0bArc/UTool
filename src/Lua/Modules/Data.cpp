@@ -4,13 +4,30 @@
 #include "../SolJson.hpp"
 
 #include <cstdint>
+#include <initializer_list>
+#include <iostream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 namespace UTool::Lua {
 namespace {
+
+void warnUnknownFields(const sol::table& table, std::initializer_list<std::string_view> known,
+                       std::string_view label) {
+  table.for_each([&](const sol::object& key, const sol::object&) {
+    if (!key.is<std::string>())
+      return;
+    const auto name = key.as<std::string>();
+    for (const auto knownName : known) {
+      if (knownName == name)
+        return;
+    }
+    std::cerr << label << " unknown field \"" << name << "\"\n";
+  });
+}
 
 void splitAssetPath(const std::string& input, std::string& fileName, std::string& relativeDir) {
   std::string normalized = input;
@@ -346,6 +363,9 @@ void registerData(sol::state& lua, ScriptRegistrations& regs) {
       t.engineVersion = optString(target, "engineVersion");
       t.minGameVersion = optString(target, "minGameVersion");
       t.maxGameVersion = optString(target, "maxGameVersion");
+      warnUnknownFields(target,
+                        {"gameId", "engineVersion", "minGameVersion", "maxGameVersion"},
+                        "utool.mod target");
       m.target = t;
     }
 
@@ -379,8 +399,10 @@ void registerData(sol::state& lua, ScriptRegistrations& regs) {
       pakSettings.sourceFilter = optString(pakTable, "sourceFilter");
       if (auto u = optBool(pakTable, "useUnrealPak"))
         pakSettings.useUnrealPak = *u;
-      else
-        pakSettings.useUnrealPak = true;
+      warnUnknownFields(pakTable,
+                        {"output", "mountPoint", "sourcePak", "curveSourcePak", "sourceFilter",
+                         "useUnrealPak", "keepCache", "zip"},
+                        "utool.mod pak");
       if (auto k = optBool(pakTable, "keepCache"))
         pakSettings.keepCache = *k;
       sol::object zipObj = pakTable["zip"];
@@ -395,6 +417,10 @@ void registerData(sol::state& lua, ScriptRegistrations& regs) {
       m.pak = pakSettings;
     }
 
+    warnUnknownFields(table,
+                      {"id", "name", "version", "description", "author", "updateVersion", "target",
+                       "scripts", "contentRoots", "pak"},
+                      "utool.mod");
     if (m.id.empty() || m.name.empty())
       throw std::runtime_error("utool.mod requires id and name");
     regs.modManifest = std::move(m);
