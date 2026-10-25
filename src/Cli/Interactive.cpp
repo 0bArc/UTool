@@ -45,10 +45,12 @@ void prepareConsole() {
   if (in != INVALID_HANDLE_VALUE) {
     DWORD mode = 0;
     if (GetConsoleMode(in, &mode)) {
-      mode |= ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT;
+      mode |= ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT | ENABLE_INSERT_MODE;
       mode &= ~ENABLE_VIRTUAL_TERMINAL_INPUT;
-      mode &= ~ENABLE_QUICK_EDIT_MODE;
-      mode |= ENABLE_EXTENDED_FLAGS;
+      mode &= ~ENABLE_MOUSE_INPUT;
+      // Quick Edit is mouse select/copy. Clearing it makes the window look frozen
+      // and blocks copying the help text. Enter copies a selection, Esc cancels it.
+      mode |= ENABLE_EXTENDED_FLAGS | ENABLE_QUICK_EDIT_MODE;
       SetConsoleMode(in, mode);
     }
   }
