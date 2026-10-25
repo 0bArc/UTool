@@ -31,7 +31,7 @@ Inside the function, `utool.curve` is set. Outside it, `utool.curve` is nil.
 
 Keys are `{ Time = number, Value = number }`. The same fields are also exposed as `time` and `value`.
 
-`LastKey` does not remove keys. `AddKey` appends. Extending a curve means "from the last vanilla time, add one key per new level". Replacing a mid-curve key means `SetKey` at that time.
+`LastKey` does not remove keys. `AddKey` replaces a key whose time is already within `0.0001`, otherwise it appends. Extending a curve means "from the last vanilla time, add one key per new level".
 
 `ScaleValues` runs on the keys loaded so far, including keys you already added in this function. Call it before `AddKey` if you only meant to scale the vanilla curve.
 

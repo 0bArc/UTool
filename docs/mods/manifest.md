@@ -53,7 +53,9 @@ Missing either one throws `utool.mod requires id and name`.
 
 All four keys are optional strings. `gameId` selects the `games` entry in `utool.json` (`Icarus`). `engineVersion`, `minGameVersion`, and `maxGameVersion` are recorded on the manifest. They do not by themselves refuse to build.
 
-The key is `minGameVersion`. A misspelling is ignored, not remapped.
+`utool mod validate` compares `minGameVersion` and `maxGameVersion` when both are set. They must be dotted numbers (`1.2.0`), and min must not be greater than max. The installed game's version is not read, so this does not check the copy on disk.
+
+A field name UTool does not know prints `utool.mod unknown field "..."` (or `utool.mod target` / `utool.mod pak` for those tables) and is otherwise ignored.
 
 ## scripts
 
@@ -65,7 +67,7 @@ Array of directories of loose files to mount into the pak. Default is `{ "conten
 
 ## pak
 
-Omit `pak` and the manifest keeps the C++ defaults (`useUnrealPak` false, no zip). Passing a `pak` table turns `useUnrealPak` on unless you set it to false.
+`useUnrealPak` defaults to true. `false` fails the build: UTool only packs with UnrealPak. Omit `zip` to leave the pak unzipped.
 
 | Field | Rule |
 |-------|------|

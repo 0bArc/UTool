@@ -35,7 +35,7 @@ utool mod ship 12
 utool mod ship 12 --dry-run
 ```
 
-The week is written through as `updateVersion` for that run, so `%updateversion%` in `mod.lua` matches the zip names. `--dry-run` builds and prints the upload plan. It does not upload and it does not write `lastShippedWeek`.
+The week is written through as `updateVersion` for that run, so `%updateversion%` in `mod.lua` matches the zip names. `--dry-run` prints the mods it would build and the `updateVersion` it would write. It does not pack, upload, or write `lastShippedWeek`.
 
 If you omit the week, it comes from `UTOOL_UPDATE_VERSION` or from `updateVersion` in `utool.json`.
 

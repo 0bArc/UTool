@@ -9,6 +9,7 @@ UTool builds Unreal Engine mods from Lua. The pages below are the manual. Start 
 | [Install](setup/install.md) | Build `utool.exe`, PATH |
 | [Configure](setup/configure.md) | `utool.json`, aliases, catalog |
 | [UnrealPak](setup/unrealpak.md) | Where the packer comes from |
+| [Notices](notices.md) | UnrealPak and UAssetAPI |
 
 ## Mods
 

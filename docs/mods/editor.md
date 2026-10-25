@@ -24,8 +24,8 @@ Pointers are JSON Pointers. `/Rows` is the datatable array. `/Rows/0/Name` is th
 |------|--------|
 | `Get(pointer)` | Read. Missing path throws `Missing path: ...` |
 | `Set(pointer, value)` | Write. Creates missing objects along the path |
-| `Replace(pointer, value)` | Write. Does not create missing parents |
-| `Add(pointer, value)` | Same as `Replace` in this version. The create-missing flag is only on `Set` |
+| `Replace(pointer, value)` | Overwrite a key or array slot that already exists. Missing key throws `Cannot replace missing path`. Does not create parents |
+| `Add(pointer, value)` | On an object, create the key or replace its value. On an array, insert at the index and shift the tail. `/-` appends. Does not create missing parents |
 | `Append(pointer, value)` | Push onto an array |
 | `MergeInto(pointer, object)` | Deep-merge an object into the object at that pointer. A non-object value throws `Merge value must be a JSON object` |
 | `Remove(pointer)` | Delete that key or array slot |

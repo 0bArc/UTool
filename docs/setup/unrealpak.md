@@ -1,6 +1,6 @@
 # UnrealPak
 
-UTool does not pack files itself. It writes a prepared tree and runs Epic's `UnrealPak.exe`. That binary is Licensed Technology under the Unreal Engine EULA. This repo does not contain it. See [NOTICES.md](../../NOTICES.md).
+UTool does not pack files itself. It writes a prepared tree and runs Epic's `UnrealPak.exe`. That binary is Licensed Technology under the Unreal Engine EULA. This repo does not contain it. See [notices](../notices.md).
 
 ## How UTool finds it
 
